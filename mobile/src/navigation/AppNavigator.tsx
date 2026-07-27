@@ -14,13 +14,17 @@ export default function AppNavigator() {
 
   useEffect(() => {
     const checkAuth = async () => {
+      console.log('checkAuth started');
       try {
+        console.log('calling getToken');
         const token = await getToken();
+        console.log('getToken resolved', token);
         setIsAuthenticated(!!token);
       } catch (error) {
         console.warn('CheckAuth error:', error);
         setIsAuthenticated(false);
       } finally {
+        console.log('setting isLoading false');
         setIsLoading(false);
       }
     };

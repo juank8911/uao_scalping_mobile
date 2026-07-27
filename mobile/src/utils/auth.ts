@@ -13,7 +13,11 @@ export const saveToken = async (token: string): Promise<void> => {
 
 export const getToken = async (): Promise<string | null> => {
   try {
-    return await SecureStore.getItemAsync(TOKEN_KEY);
+    const tokenPromise = SecureStore.getItemAsync(TOKEN_KEY);
+    const timeoutPromise = new Promise<null>((_, reject) => 
+      setTimeout(() => reject(new Error('SecureStore timeout')), 2000)
+    );
+    return await Promise.race([tokenPromise, timeoutPromise]);
   } catch (error) {
     console.warn('Error getting token:', error);
     return null;

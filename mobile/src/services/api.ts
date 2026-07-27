@@ -15,6 +15,11 @@ export interface UpdateConfig {
   max_concurrent_trades?: number;
   min_profit_target_usdt?: number;
   max_drawdown_usdt?: number;
+  demo_api_key?: string;
+  demo_api_secret?: string;
+  real_api_key?: string;
+  real_api_secret?: string;
+  execution_mode?: string;
 }
 
 export const login = async (username: string, password: string): Promise<any> => {
