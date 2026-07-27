@@ -4,15 +4,28 @@ import * as LocalAuthentication from 'expo-local-authentication';
 const TOKEN_KEY = 'uao_auth_token';
 
 export const saveToken = async (token: string): Promise<void> => {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  try {
+    await SecureStore.setItemAsync(TOKEN_KEY, token);
+  } catch (error) {
+    console.warn('Error saving token:', error);
+  }
 };
 
 export const getToken = async (): Promise<string | null> => {
-  return await SecureStore.getItemAsync(TOKEN_KEY);
+  try {
+    return await SecureStore.getItemAsync(TOKEN_KEY);
+  } catch (error) {
+    console.warn('Error getting token:', error);
+    return null;
+  }
 };
 
 export const deleteToken = async (): Promise<void> => {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  try {
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+  } catch (error) {
+    console.warn('Error deleting token:', error);
+  }
 };
 
 export const authenticateBiometrically = async (promptMessage: string = 'Autenticación requerida para esta acción'): Promise<boolean> => {

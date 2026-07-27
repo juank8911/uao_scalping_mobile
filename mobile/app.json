@@ -23,6 +23,7 @@
     },
     "plugins": [
       "expo-secure-store"
-    ]
+    ],
+    "sdkVersion": "54.0.0"
   }
 }

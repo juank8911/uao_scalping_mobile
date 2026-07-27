@@ -10,15 +10,19 @@ const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
   const [isLoading, setIsLoading] = useState(true);
-  const [initialRoute, setInitialRoute] = useState('Login');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
-      const token = await getToken();
-      if (token) {
-        setInitialRoute('MainTabs');
+      try {
+        const token = await getToken();
+        setIsAuthenticated(!!token);
+      } catch (error) {
+        console.warn('CheckAuth error:', error);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     checkAuth();
   }, []);
@@ -35,7 +39,7 @@ export default function AppNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName={initialRoute}
+      initialRouteName={isAuthenticated ? 'MainTabs' : 'Login'}
       screenOptions={{ headerShown: false }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />

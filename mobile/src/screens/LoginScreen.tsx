@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { NeoLayout, NeoCard, NeoInput, NeoButton } from 'jeikei-design-system/native';
 import { authenticateBiometrically, saveToken } from '../utils/auth';
+import { login } from '../services/api';
 
 export default function LoginScreen({ navigation }: any) {
   const [username, setUsername] = useState('');
@@ -10,19 +11,19 @@ export default function LoginScreen({ navigation }: any) {
 
   const handleLogin = async () => {
     setError('');
-    // Mock login logic
-    if (username === 'admin' && password === 'admin') {
-      // Prompt for biometric
+    
+    try {
       const bioSuccess = await authenticateBiometrically('Autenticación Biométrica requerida para acceder');
-
-      if (bioSuccess) {
-        await saveToken('mock_jwt_token_123');
-        navigation.replace('MainTabs');
-      } else {
+      
+      if (!bioSuccess) {
         setError('Autenticación biométrica fallida.');
+        return;
       }
-    } else {
-      setError('Credenciales inválidas. Usa admin/admin');
+      
+      await login(username, password);
+      navigation.replace('MainTabs');
+    } catch (err: any) {
+      setError(err.message || 'Credenciales inválidas.');
     }
   };
 
