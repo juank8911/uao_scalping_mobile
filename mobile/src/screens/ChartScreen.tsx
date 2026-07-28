@@ -10,6 +10,7 @@ export default function ChartScreen() {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isWebViewLoaded, setIsWebViewLoaded] = useState(false);
   const webviewRef = useRef<WebView>(null);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ export default function ChartScreen() {
 
   // Refrescar los datos del gráfico cuando cambia el símbolo o el estado (para inyectar)
   useEffect(() => {
-    if (!selectedSymbol || !webviewRef.current) return;
+    if (!selectedSymbol || !webviewRef.current || !isWebViewLoaded) return;
     
     const updateChart = async () => {
       const data = await fetchChartData(selectedSymbol);
@@ -71,7 +72,7 @@ export default function ChartScreen() {
     };
 
     updateChart();
-  }, [selectedSymbol, status]); // Run when status updates to update orders, or symbol changes to get new candles
+  }, [selectedSymbol, status, isWebViewLoaded]); // Run when status updates to update orders, or symbol changes to get new candles
 
   const getTradingViewHTML = () => {
     return `
@@ -89,8 +90,7 @@ export default function ChartScreen() {
           <div id="chart"></div>
           <script>
             const chart = LightweightCharts.createChart(document.getElementById('chart'), {
-                width: window.innerWidth,
-                height: window.innerHeight,
+                autoSize: true,
                 layout: {
                     background: { type: 'solid', color: '#020202' },
                     textColor: '#d1d4dc',
@@ -113,49 +113,63 @@ export default function ChartScreen() {
                 wickDownColor: '#ef5350'
             });
 
-            window.addEventListener('resize', () => {
-                chart.resize(window.innerWidth, window.innerHeight);
-            });
-
             let currentLines = [];
 
+            // Capturar errores y enviarlos a React Native
+            window.onerror = function(message, source, lineno, colno, error) {
+               window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: message }));
+            };
+
             window.updateChartData = function(data, trades, orders) {
-                if (data && data.length > 0) {
-                    candleSeries.setData(data);
-                }
-
-                if (trades) {
-                    const markers = trades.map(t => ({
-                        time: t.time,
-                        position: t.side === 'buy' ? 'belowBar' : 'aboveBar',
-                        color: t.side === 'buy' ? '#26a69a' : '#ef5350',
-                        shape: t.side === 'buy' ? 'arrowUp' : 'arrowDown',
-                        text: t.side === 'buy' ? 'B' : 'S'
-                    }));
-                    markers.sort((a, b) => a.time - b.time);
-                    
-                    // Solo actualizamos si hay suficientes elementos para evitar parpadeos
-                    if (markers.length > 0) {
-                      candleSeries.setMarkers(markers);
+                try {
+                    if (data && data.length > 0) {
+                        candleSeries.setData(data);
                     }
-                }
 
-                currentLines.forEach(line => candleSeries.removePriceLine(line));
-                currentLines = [];
+                    if (trades && trades.length > 0) {
+                        const markers = trades.map(t => ({
+                            time: t.time,
+                            position: t.side === 'buy' ? 'belowBar' : 'aboveBar',
+                            color: t.side === 'buy' ? '#26a69a' : '#ef5350',
+                            shape: t.side === 'buy' ? 'arrowUp' : 'arrowDown',
+                            text: t.side === 'buy' ? 'B' : 'S'
+                        }));
+                        markers.sort((a, b) => a.time - b.time);
+                        
+                        // Eliminar tiempos duplicados (Lightweight Charts crashea con duplicados)
+                        const uniqueMarkers = [];
+                        let lastTime = 0;
+                        for (let m of markers) {
+                            if (m.time !== lastTime) {
+                                uniqueMarkers.push(m);
+                                lastTime = m.time;
+                            }
+                        }
+                        
+                        if (uniqueMarkers.length > 0) {
+                          candleSeries.setMarkers(uniqueMarkers);
+                        }
+                    }
 
-                if (orders) {
-                    orders.forEach(ord => {
-                        const isBuy = ord.side === 'BUY';
-                        const line = candleSeries.createPriceLine({
-                            price: ord.price,
-                            color: isBuy ? '#26a69a' : '#ef5350',
-                            lineWidth: 2,
-                            lineStyle: LightweightCharts.LineStyle.Dashed,
-                            axisLabelVisible: true,
-                            title: ord.type,
+                    currentLines.forEach(line => candleSeries.removePriceLine(line));
+                    currentLines = [];
+
+                    if (orders) {
+                        orders.forEach(ord => {
+                            const isBuy = ord.side === 'BUY';
+                            const line = candleSeries.createPriceLine({
+                                price: ord.price,
+                                color: isBuy ? '#26a69a' : '#ef5350',
+                                lineWidth: 2,
+                                lineStyle: LightweightCharts.LineStyle.Dashed,
+                                axisLabelVisible: true,
+                                title: ord.type,
+                            });
+                            currentLines.push(line);
                         });
-                        currentLines.push(line);
-                    });
+                    }
+                } catch (e) {
+                   window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: e.message }));
                 }
             };
           </script>
@@ -191,6 +205,16 @@ export default function ChartScreen() {
                    scrollEnabled={false}
                    bounces={false}
                    javaScriptEnabled={true}
+                   originWhitelist={['*']}
+                   onLoadEnd={() => setIsWebViewLoaded(true)}
+                   onMessage={(event) => {
+                     try {
+                       const data = JSON.parse(event.nativeEvent.data);
+                       if (data.type === 'error') {
+                         console.error('WebView Chart Error:', data.message);
+                       }
+                     } catch(e) {}
+                   }}
                  />
               </View>
               
