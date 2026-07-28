@@ -8,21 +8,26 @@ export default function DashboardScreen() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean>(true);
 
   useEffect(() => {
     const fetchStatus = async () => {
-      const data = await getStatus();
-      setStatus(data);
-      if (data.active_symbols && data.active_symbols.length > 0) {
-        // Usa una función de callback para leer el valor actualizado del state sin depender de selectedSymbol en el array de dependencias
-        setSelectedSymbol((prev) => {
-          if (!prev || !data.active_symbols.includes(prev)) {
-            return data.active_symbols[0];
-          }
-          return prev;
-        });
-      } else {
-        setSelectedSymbol(null);
+      try {
+        const data = await getStatus();
+        setIsConnected(true);
+        setStatus(data);
+        if (data.active_symbols && data.active_symbols.length > 0) {
+          setSelectedSymbol((prev) => {
+            if (!prev || !data.active_symbols.includes(prev)) {
+              return data.active_symbols[0];
+            }
+            return prev;
+          });
+        } else {
+          setSelectedSymbol(null);
+        }
+      } catch (error) {
+        setIsConnected(false);
       }
     };
 
@@ -56,6 +61,12 @@ export default function DashboardScreen() {
   return (
     <NeoLayout>
       <ScrollView contentContainerStyle={styles.container}>
+        {!isConnected && (
+          <View style={{ backgroundColor: '#ef5350', padding: 12, borderRadius: 8, marginBottom: 16, alignItems: 'center' }}>
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>⚠️ DESCONECTADO DE LA API</Text>
+            <Text style={{ color: '#fff', fontSize: 12, marginTop: 4 }}>Reintentando conectar en segundo plano...</Text>
+          </View>
+        )}
         <View style={styles.header}>
           <View style={styles.badgeRow}>
             <NeoBadge

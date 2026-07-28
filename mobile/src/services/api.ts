@@ -149,7 +149,7 @@ export const stopEngine = async (): Promise<any> => {
 
 export const fetchChartData = async (symbol: string) => {
   try {
-    const response = await fetchWithAuth(`${BASE_URL}/chart/ohlcv?symbol=${encodeURIComponent(symbol)}`, {
+    const response = await fetchWithAuth(`${BASE_URL}/chart/ohlcv?symbol=${encodeURIComponent(symbol)}&timeframe=5m`, {
       method: 'GET',
     });
     const data = await response.json();
@@ -174,43 +174,16 @@ export const fetchChartTrades = async (symbol: string) => {
 };
 
 export const getStatus = async (): Promise<SystemStatus> => {
-  try {
-    const response = await fetchWithAuth(`${BASE_URL}/status`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    if (response.ok) {
-        return await response.json();
-    }
-    throw new Error('Network error');
-  } catch (error) {
-    console.error('Error getting status:', error);
-    // Mock fallback for sandbox
-    return {
-      status: 'running',
-      active_symbols: ['BTC/USDT', 'ETH/USDT'],
-      is_running: true,
-      daily_pnl: 12.5,
-      execution_mode: 'PAPER_TRADING',
-      open_positions: [
-        {
-          symbol: 'BTC/USDT',
-          side: 'buy',
-          contracts: 0.05,
-          entryPrice: 65000,
-          markPrice: 65200,
-          unrealizedPnl: 10,
-          leverage: 15,
-          orders: [
-            { type: 'TAKE_PROFIT', price: 65500, distance_pct: 0.46 },
-            { type: 'STOP_LOSS', price: 64500, distance_pct: 1.07 }
-          ]
-        }
-      ]
-    };
+  const response = await fetchWithAuth(`${BASE_URL}/status`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  if (response.ok) {
+      return await response.json();
   }
+  throw new Error('Network error');
 };
 
 export const updateConfig = async (config: UpdateConfig): Promise<any> => {
