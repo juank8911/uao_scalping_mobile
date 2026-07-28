@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Switch, Alert } from 'react-native';
 import { NeoLayout, NeoCard, NeoBadge } from 'jeikei-design-system/native';
-import { getStatus, SystemStatus } from '../services/api';
+import { getStatus, SystemStatus, startEngine, stopEngine } from '../services/api';
+import { authenticateBiometrically } from '../utils/auth';
 
 export default function DashboardScreen() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -18,14 +19,46 @@ export default function DashboardScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleToggle = async (value: boolean) => {
+    // If turning on
+    if (value) {
+      const success = await authenticateBiometrically('Confirmar inicio del motor');
+      if (success) {
+        const response = await startEngine();
+        Alert.alert('Start Engine', response.message);
+        // Optimistic update
+        setStatus(prev => prev ? { ...prev, is_running: true } : null);
+      }
+    } else {
+      const success = await authenticateBiometrically('Confirmar parada del motor');
+      if (success) {
+        const response = await stopEngine();
+        Alert.alert('Stop Engine', response.message);
+        // Optimistic update
+        setStatus(prev => prev ? { ...prev, is_running: false } : null);
+      }
+    }
+  };
+
   return (
     <NeoLayout>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.header}>
-          <NeoBadge
-            label={status?.is_running ? 'SYSTEM ONLINE' : 'SYSTEM OFFLINE'}
-            variant={status?.is_running ? 'success' : 'danger'}
-          />
+          <View style={styles.badgeRow}>
+            <NeoBadge
+              label={status?.is_running ? 'SYSTEM ONLINE' : 'SYSTEM OFFLINE'}
+              variant={status?.is_running ? 'success' : 'danger'}
+            />
+            <View style={{ width: 16 }} />
+            <Switch
+              trackColor={{ false: '#3e3e3e', true: '#4DA8DA' }}
+              thumbColor={status?.is_running ? '#fff' : '#f4f3f4'}
+              ios_backgroundColor="#3e3e3e"
+              onValueChange={handleToggle}
+              value={status?.is_running ?? false}
+            />
+          </View>
+          
           <View style={{ height: 8 }} />
           {status && (
             <NeoBadge
@@ -117,6 +150,11 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
     alignItems: 'center',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   text: {
     color: 'rgba(255, 255, 255, 0.7)',

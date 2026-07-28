@@ -86,11 +86,24 @@ export const login = async (username: string, password: string): Promise<any> =>
 
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   const token = await getToken();
-  const headers: any = { ...options.headers };
+  const headers: any = { 
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    ...options.headers 
+  };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const response = await fetch(url, { ...options, headers });
+  
+  // Append timestamp to GET requests to bust cache on iOS/Android
+  let finalUrl = url;
+  if (!options.method || options.method === 'GET') {
+    const separator = url.includes('?') ? '&' : '?';
+    finalUrl = `${url}${separator}_t=${Date.now()}`;
+  }
+
+  const response = await fetch(finalUrl, { ...options, headers });
   
   if (response.status === 401) {
     await deleteToken();
