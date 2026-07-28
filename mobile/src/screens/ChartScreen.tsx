@@ -38,7 +38,7 @@ export default function ChartScreen() {
         setStatus(data);
     }, 5000);
     return () => clearInterval(interval);
-  }, [selectedSymbol]);
+  }, []);
 
   const activePosition: PositionInfo | undefined = status?.open_positions?.find(
     (p) => p.symbol === selectedSymbol
@@ -50,29 +50,33 @@ export default function ChartScreen() {
     if (!selectedSymbol || !webviewRef.current || !isWebViewLoaded) return;
     
     const updateChart = async () => {
-      const data = await fetchChartData(selectedSymbol);
-      const trades = await fetchChartTrades(selectedSymbol);
-      
-      const chartOrders = [
-          ...standaloneOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
-          ...(activePosition?.orders || []).map(o => ({ 
-              price: o.price, 
-              type: o.type, 
-              side: activePosition.side === 'long' ? 'SELL' : 'BUY' 
-          }))
-      ];
-      
-      const script = `
-        if (window.updateChartData) {
-          window.updateChartData(${JSON.stringify(data)}, ${JSON.stringify(trades)}, ${JSON.stringify(chartOrders)});
-        }
-        true;
-      `;
-      webviewRef.current?.injectJavaScript(script);
+      try {
+        const data = await fetchChartData(selectedSymbol);
+        const trades = await fetchChartTrades(selectedSymbol);
+        
+        const chartOrders = [
+            ...standaloneOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
+            ...(activePosition?.orders || []).map(o => ({ 
+                price: o.price, 
+                type: o.type, 
+                side: activePosition.side === 'long' ? 'SELL' : 'BUY' 
+            }))
+        ];
+        
+        const script = `
+          if (window.updateChartData) {
+            window.updateChartData(${JSON.stringify(data)}, ${JSON.stringify(trades)}, ${JSON.stringify(chartOrders)});
+          }
+          true;
+        `;
+        webviewRef.current?.injectJavaScript(script);
+      } catch (err) {
+        console.error("Error updating chart:", err);
+      }
     };
 
     updateChart();
-  }, [selectedSymbol, status, isWebViewLoaded]); // Run when status updates to update orders, or symbol changes to get new candles
+  }, [selectedSymbol, status, isWebViewLoaded]);
 
   const getTradingViewHTML = () => {
     return `
@@ -84,7 +88,7 @@ export default function ChartScreen() {
             body, html { margin: 0; padding: 0; background-color: #020202; height: 100%; width: 100%; overflow: hidden; }
             #chart { width: 100%; height: 100%; }
           </style>
-          <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+          <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
         </head>
         <body>
           <div id="chart"></div>
@@ -156,10 +160,13 @@ export default function ChartScreen() {
 
                     if (orders) {
                         orders.forEach(ord => {
-                            const isBuy = ord.side === 'BUY';
+                            let lineColor = ord.side === 'BUY' ? '#26a69a' : '#ef5350';
+                            if (ord.type === 'TAKE_PROFIT') lineColor = '#26a69a';
+                            if (ord.type === 'STOP_LOSS') lineColor = '#ef5350';
+
                             const line = candleSeries.createPriceLine({
                                 price: ord.price,
-                                color: isBuy ? '#26a69a' : '#ef5350',
+                                color: lineColor,
                                 lineWidth: 2,
                                 lineStyle: LightweightCharts.LineStyle.Dashed,
                                 axisLabelVisible: true,

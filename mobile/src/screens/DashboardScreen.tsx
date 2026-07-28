@@ -163,16 +163,37 @@ export default function DashboardScreen() {
                     {position.orders && position.orders.length > 0 && (
                       <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 8 }}>
                         <Text style={styles.boldText}>Órdenes Pendientes de Salida:</Text>
-                        {position.orders.map((ord, idx) => (
-                          <Text key={idx} style={styles.posText}>
-                            • {ord.type}: {ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%)
-                          </Text>
-                        ))}
+                        {position.orders.map((ord, idx) => {
+                          let expectedPnL = 0;
+                          if (position.side.toLowerCase() === 'long' || position.side.toLowerCase() === 'buy') {
+                            expectedPnL = (ord.price - position.entryPrice) * position.contracts;
+                          } else {
+                            expectedPnL = (position.entryPrice - ord.price) * position.contracts;
+                          }
+                          const isProfit = expectedPnL > 0;
+                          
+                          return (
+                            <Text key={idx} style={styles.posText}>
+                              • {ord.type}: {ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%) 
+                              <Text style={{ color: isProfit ? '#26a69a' : '#ef5350' }}>
+                                {' '}[PnL: {expectedPnL > 0 ? '+' : ''}{expectedPnL.toFixed(2)} USDT]
+                              </Text>
+                            </Text>
+                          );
+                        })}
                       </View>
                     )}
                   </View>
                 ) : standaloneOrders.length > 0 ? (
                   <View style={styles.positionDetails}>
+                    {status.latest_prices && status.latest_prices[symbol] && (
+                        <View style={{ marginBottom: 16, backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 8, alignItems: 'center' }}>
+                            <Text style={[styles.text, { color: '#A0A0A0' }]}>Precio Actual</Text>
+                            <Text style={[styles.boldText, { color: '#FFF', fontSize: 18, marginTop: 4 }]}>
+                                {status.latest_prices[symbol].toFixed(4)}
+                            </Text>
+                        </View>
+                    )}
                     <Text style={[styles.boldText, { marginBottom: 8 }]}>Órdenes de Entrada Abiertas:</Text>
                     {standaloneOrders.map((ord, idx) => (
                       <View key={idx} style={{ marginBottom: 4 }}>
@@ -185,13 +206,23 @@ export default function DashboardScreen() {
                     ))}
                   </View>
                 ) : (
-                  <View style={{ alignItems: 'center', paddingVertical: 12 }}>
-                    <Text style={[styles.text, { fontSize: 14, color: '#A0A0A0' }]}>Estado Actual del Bot:</Text>
+                  <View style={{ paddingVertical: 12 }}>
+                    <Text style={[styles.text, { fontSize: 14, color: '#A0A0A0', textAlign: 'center' }]}>Estado Actual del Bot:</Text>
                     <Text style={[styles.boldText, { color: '#4DA8DA', marginTop: 8, textAlign: 'center', fontSize: 16 }]}>
                         {status.status.toUpperCase()}
                     </Text>
+                    
+                    {status.latest_prices && status.latest_prices[symbol] && (
+                        <View style={{ marginTop: 16, backgroundColor: 'rgba(255,255,255,0.05)', padding: 12, borderRadius: 8, alignItems: 'center' }}>
+                            <Text style={[styles.text, { color: '#A0A0A0' }]}>Precio Actual en Vivo</Text>
+                            <Text style={[styles.boldText, { color: '#FFF', fontSize: 20, marginTop: 4 }]}>
+                                {status.latest_prices[symbol].toFixed(4)}
+                            </Text>
+                        </View>
+                    )}
+
                     <Text style={[styles.text, { marginTop: 12, textAlign: 'center', fontSize: 13, color: '#808080' }]}>
-                        El bot está ejecutando esta acción en el mercado ahora mismo.
+                        El bot está monitoreando oportunidades para entrar al mercado.
                     </Text>
                   </View>
                 )}

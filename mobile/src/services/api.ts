@@ -27,9 +27,10 @@ export interface SystemStatus {
   is_running: boolean;
   daily_pnl: number;
   execution_mode: string;
-  global_balance?: number;
-  open_positions?: PositionInfo[];
-  open_orders?: any[];
+  global_balance: number;
+  open_positions: PositionInfo[];
+  open_orders: OrderInfo[];
+  latest_prices: Record<string, number>;
 }
 
 export interface UpdateConfig {
