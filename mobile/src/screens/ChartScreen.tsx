@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Modal, FlatList, ActivityIndicator } from 'react-native';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/native';
-import { getStatus, SystemStatus, PositionInfo, getCredentials, fetchChartData, fetchChartTrades } from '../services/api';
+import { getStatus, SystemStatus, PositionInfo, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory } from '../services/api';
 import { WebView } from 'react-native-webview';
 
 export default function ChartScreen() {
@@ -11,6 +11,7 @@ export default function ChartScreen() {
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isWebViewLoaded, setIsWebViewLoaded] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
   const webviewRef = useRef<WebView>(null);
 
   useEffect(() => {
@@ -53,6 +54,8 @@ export default function ChartScreen() {
       try {
         const data = await fetchChartData(selectedSymbol);
         const trades = await fetchChartTrades(selectedSymbol);
+        const historyData = await fetchChartHistory(selectedSymbol);
+        setHistory(historyData);
         
         const chartOrders = [
             ...standaloneOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
@@ -274,6 +277,34 @@ export default function ChartScreen() {
                     <Text style={styles.text}>Monitoreando el mercado. Sin posiciones activas en este símbolo.</Text>
                   )}
                 </NeoCard>
+                
+                {history.length > 0 && (
+                  <NeoCard title="Historial de Órdenes (Últimas 6)">
+                    {history.map((trade, idx) => (
+                      <View key={idx} style={[styles.orderRow, { marginBottom: 12, paddingBottom: 12, borderBottomWidth: idx === history.length - 1 ? 0 : 1, borderBottomColor: 'rgba(255,255,255,0.1)' }]}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                            <NeoBadge 
+                              label={trade.side} 
+                              variant={trade.side === 'BUY' ? 'success' : 'danger'} 
+                            />
+                            <Text style={[styles.text, { fontSize: 12, marginLeft: 8, color: '#aaa' }]}>
+                              {new Date(trade.time * 1000).toLocaleTimeString()}
+                            </Text>
+                          </View>
+                          <Text style={[styles.text, { fontSize: 13 }]}>Entrada: {trade.entryPrice.toFixed(4)}</Text>
+                          <Text style={[styles.text, { fontSize: 13 }]}>Salida: {trade.exitPrice.toFixed(4)}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                          <Text style={[styles.boldText, { color: trade.pnl >= 0 ? '#26a69a' : '#ef5350', fontSize: 16 }]}>
+                            {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)} USDT
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </NeoCard>
+                )}
+
                 <View style={{ height: 100 }} />
               </ScrollView>
             </>

@@ -173,6 +173,19 @@ export const fetchChartTrades = async (symbol: string) => {
   }
 };
 
+export const fetchChartHistory = async (symbol: string) => {
+  try {
+    const response = await fetchWithAuth(`${BASE_URL}/chart/history?symbol=${encodeURIComponent(symbol)}&limit=6`, {
+      method: 'GET',
+    });
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching chart history:', error);
+    return [];
+  }
+};
+
 export const getStatus = async (): Promise<SystemStatus> => {
   const response = await fetchWithAuth(`${BASE_URL}/status`, {
     method: 'GET',
