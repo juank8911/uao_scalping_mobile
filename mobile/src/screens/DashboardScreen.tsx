@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, Switch, Alert } from 'react-native';
-import { NeoLayout, NeoCard, NeoBadge } from 'jeikei-design-system/native';
+import { StyleSheet, View, Text, ScrollView, Switch, Alert, TouchableOpacity, Modal, FlatList } from 'react-native';
+import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/native';
 import { getStatus, SystemStatus, startEngine, stopEngine } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 
 export default function DashboardScreen() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [isDropdownVisible, setDropdownVisible] = useState(false);
 
   useEffect(() => {
     const fetchStatus = async () => {
       const data = await getStatus();
       setStatus(data);
+      if (!selectedSymbol && data.active_symbols && data.active_symbols.length > 0) {
+        setSelectedSymbol(data.active_symbols[0]);
+      }
     };
 
     fetchStatus();
@@ -96,10 +101,20 @@ export default function DashboardScreen() {
 
         <View style={{ height: 24 }} />
 
-        <Text style={styles.sectionTitle}>Símbolos Monitoreados</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.sectionTitle}>Símbolo Seleccionado</Text>
+          <TouchableOpacity 
+            style={styles.dropdownBtn}
+            onPress={() => setDropdownVisible(true)}
+          >
+            <Text style={styles.dropdownText}>{selectedSymbol || 'Ninguno'}</Text>
+          </TouchableOpacity>
+        </View>
         <View style={{ height: 16 }} />
 
-        {status?.active_symbols.map((symbol) => {
+        {(() => {
+          if (!status || !selectedSymbol) return null;
+          const symbol = selectedSymbol;
           const position = status.open_positions?.find((p) => p.symbol === symbol);
           
           return (
@@ -136,8 +151,45 @@ export default function DashboardScreen() {
               </NeoCard>
             </View>
           );
-        })}
+        })()}
+
       </ScrollView>
+
+      <Modal visible={isDropdownVisible} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Seleccionar Símbolo</Text>
+            {status?.active_symbols && status.active_symbols.length > 0 ? (
+              <FlatList
+                data={status.active_symbols}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.modalItem}
+                    onPress={() => {
+                      setSelectedSymbol(item);
+                      setDropdownVisible(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalItemText, 
+                      selectedSymbol === item && { color: '#4DA8DA', fontWeight: 'bold' }
+                    ]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            ) : (
+               <Text style={styles.text}>Ningún símbolo activo disponible.</Text>
+            )}
+            <View style={{ height: 16 }} />
+            <NeoButton variant="outline" size="md" onPress={() => setDropdownVisible(false)}>
+              Cerrar
+            </NeoButton>
+          </View>
+        </View>
+      </Modal>
     </NeoLayout>
   );
 }
@@ -181,5 +233,55 @@ const styles = StyleSheet.create({
   boldText: {
     fontWeight: 'bold',
     color: '#4DA8DA',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  dropdownBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  dropdownText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 24,
+    maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalItem: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  modalItemText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
   }
 });

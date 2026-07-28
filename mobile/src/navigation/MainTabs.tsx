@@ -2,6 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import DashboardScreen from '../screens/DashboardScreen';
 import ControlPanelScreen from '../screens/ControlPanelScreen';
+import ChartScreen from '../screens/ChartScreen';
 import { View, Text } from 'react-native';
 
 const Tab = createBottomTabNavigator();
@@ -45,6 +46,13 @@ export default function MainTabs() {
         component={DashboardScreen}
         options={{
           tabBarIcon: ({ focused }) => <TabBarIcon focused={focused} name="DASH" />
+        }}
+      />
+      <Tab.Screen
+        name="Chart"
+        component={ChartScreen}
+        options={{
+          tabBarIcon: ({ focused }) => <TabBarIcon focused={focused} name="CHART" />
         }}
       />
       <Tab.Screen
