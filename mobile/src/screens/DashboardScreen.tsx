@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Switch, Alert, TouchableOpacity, Modal, FlatList } from 'react-native';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/native';
-import { getStatus, SystemStatus, startEngine, stopEngine } from '../services/api';
+import { getStatus, SystemStatus, startEngine, stopEngine, PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
+import { PositionChartModal } from '../components/PositionChartModal';
 
 export default function DashboardScreen() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isConnected, setIsConnected] = useState<boolean>(true);
+  const [chartModalVisible, setChartModalVisible] = useState(false);
+  const [selectedPosition, setSelectedPosition] = useState<PositionInfo | null>(null);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -156,14 +159,23 @@ export default function DashboardScreen() {
           
           return (
             <View key={symbol} style={{ marginBottom: 16 }}>
-              <NeoCard
-                title={symbol}
-                value={position ? 'EN POSICIÓN' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'MONITOREANDO')}
-                trend={position ? {
-                  value: `${position.unrealizedPnl >= 0 ? '+' : ''}${position.unrealizedPnl.toFixed(2)} USDT`,
-                  direction: position.unrealizedPnl >= 0 ? 'up' : 'down'
-                } : undefined}
+              <TouchableOpacity
+                activeOpacity={position ? 0.7 : 1}
+                onPress={() => {
+                  if (position) {
+                    setSelectedPosition(position);
+                    setChartModalVisible(true);
+                  }
+                }}
               >
+                <NeoCard
+                  title={symbol}
+                  value={position ? 'EN POSICIÓN' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'MONITOREANDO')}
+                  trend={position ? {
+                    value: `${position.unrealizedPnl >= 0 ? '+' : ''}${position.unrealizedPnl.toFixed(2)} USDT`,
+                    direction: position.unrealizedPnl >= 0 ? 'up' : 'down'
+                  } : undefined}
+                >
                 {position ? (
                   <View style={styles.positionDetails}>
                     <Text style={styles.posText}><Text style={styles.boldText}>Lado:</Text> {position.side.toUpperCase()}</Text>
@@ -238,11 +250,21 @@ export default function DashboardScreen() {
                   </View>
                 )}
               </NeoCard>
+              </TouchableOpacity>
             </View>
           );
         })()}
 
       </ScrollView>
+
+      <PositionChartModal
+        visible={chartModalVisible}
+        onClose={() => {
+          setChartModalVisible(false);
+          setSelectedPosition(null);
+        }}
+        position={selectedPosition}
+      />
 
       <Modal visible={isDropdownVisible} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
