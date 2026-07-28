@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Modal, FlatList, ActivityIndicator } from 'react-native';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/native';
-import { getStatus, SystemStatus, PositionInfo, getCredentials } from '../services/api';
+import { getStatus, SystemStatus, PositionInfo, getCredentials, fetchChartData, fetchChartTrades } from '../services/api';
 import { WebView } from 'react-native-webview';
 
 export default function ChartScreen() {
@@ -10,6 +10,7 @@ export default function ChartScreen() {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const webviewRef = useRef<WebView>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,51 +42,123 @@ export default function ChartScreen() {
   const activePosition: PositionInfo | undefined = status?.open_positions?.find(
     (p) => p.symbol === selectedSymbol
   );
+  const standaloneOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
 
-  const getTradingViewHTML = (symbol: string, exchange: string) => {
-    let cleanSymbol = symbol.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  // Refrescar los datos del gráfico cuando cambia el símbolo o el estado (para inyectar)
+  useEffect(() => {
+    if (!selectedSymbol || !webviewRef.current) return;
     
-    // TradingView format tweaks for perpetuals
-    if (exchange === 'OKX' || exchange === 'BYBIT') {
-      // TradingView often uses .P for perpetual futures on OKX and Bybit
-      // If spot is desired, remove the .P. We default to .P for scalping bots.
-      cleanSymbol = cleanSymbol + '.P'; 
-    }
+    const updateChart = async () => {
+      const data = await fetchChartData(selectedSymbol);
+      const trades = await fetchChartTrades(selectedSymbol);
+      
+      const chartOrders = [
+          ...standaloneOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
+          ...(activePosition?.orders || []).map(o => ({ 
+              price: o.price, 
+              type: o.type, 
+              side: activePosition.side === 'long' ? 'SELL' : 'BUY' 
+          }))
+      ];
+      
+      const script = `
+        if (window.updateChartData) {
+          window.updateChartData(${JSON.stringify(data)}, ${JSON.stringify(trades)}, ${JSON.stringify(chartOrders)});
+        }
+        true;
+      `;
+      webviewRef.current?.injectJavaScript(script);
+    };
 
-    const tvSymbol = `${exchange}:${cleanSymbol}`;
+    updateChart();
+  }, [selectedSymbol, status]); // Run when status updates to update orders, or symbol changes to get new candles
+
+  const getTradingViewHTML = () => {
     return `
       <!DOCTYPE html>
       <html>
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
           <style>
-            body { margin: 0; padding: 0; background-color: #020202; height: 100vh; overflow: hidden; }
-            #tradingview_widget { height: 100%; width: 100%; }
+            body, html { margin: 0; padding: 0; background-color: #020202; height: 100%; width: 100%; overflow: hidden; }
+            #chart { width: 100%; height: 100%; }
           </style>
+          <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
         </head>
         <body>
-          <div class="tradingview-widget-container">
-            <div id="tradingview_widget"></div>
-            <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-            <script type="text/javascript">
-            new TradingView.widget({
-              "autosize": true,
-              "symbol": "${tvSymbol}",
-              "interval": "1",
-              "timezone": "Etc/UTC",
-              "theme": "dark",
-              "style": "1",
-              "locale": "es",
-              "enable_publishing": false,
-              "backgroundColor": "#020202",
-              "gridColor": "rgba(255, 255, 255, 0.06)",
-              "hide_top_toolbar": false,
-              "hide_legend": false,
-              "save_image": false,
-              "container_id": "tradingview_widget"
+          <div id="chart"></div>
+          <script>
+            const chart = LightweightCharts.createChart(document.getElementById('chart'), {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                layout: {
+                    background: { type: 'solid', color: '#020202' },
+                    textColor: '#d1d4dc',
+                },
+                grid: {
+                    vertLines: { color: 'rgba(255, 255, 255, 0.06)' },
+                    horzLines: { color: 'rgba(255, 255, 255, 0.06)' },
+                },
+                timeScale: {
+                    timeVisible: true,
+                    secondsVisible: false,
+                }
             });
-            </script>
-          </div>
+
+            const candleSeries = chart.addCandlestickSeries({
+                upColor: '#26a69a',
+                downColor: '#ef5350',
+                borderVisible: false,
+                wickUpColor: '#26a69a',
+                wickDownColor: '#ef5350'
+            });
+
+            window.addEventListener('resize', () => {
+                chart.resize(window.innerWidth, window.innerHeight);
+            });
+
+            let currentLines = [];
+
+            window.updateChartData = function(data, trades, orders) {
+                if (data && data.length > 0) {
+                    candleSeries.setData(data);
+                }
+
+                if (trades) {
+                    const markers = trades.map(t => ({
+                        time: t.time,
+                        position: t.side === 'buy' ? 'belowBar' : 'aboveBar',
+                        color: t.side === 'buy' ? '#26a69a' : '#ef5350',
+                        shape: t.side === 'buy' ? 'arrowUp' : 'arrowDown',
+                        text: t.side === 'buy' ? 'B' : 'S'
+                    }));
+                    markers.sort((a, b) => a.time - b.time);
+                    
+                    // Solo actualizamos si hay suficientes elementos para evitar parpadeos
+                    if (markers.length > 0) {
+                      candleSeries.setMarkers(markers);
+                    }
+                }
+
+                currentLines.forEach(line => candleSeries.removePriceLine(line));
+                currentLines = [];
+
+                if (orders) {
+                    orders.forEach(ord => {
+                        const isBuy = ord.side === 'BUY';
+                        const line = candleSeries.createPriceLine({
+                            price: ord.price,
+                            color: isBuy ? '#26a69a' : '#ef5350',
+                            lineWidth: 2,
+                            lineStyle: LightweightCharts.LineStyle.Dashed,
+                            axisLabelVisible: true,
+                            title: ord.type,
+                        });
+                        currentLines.push(line);
+                    });
+                }
+            };
+          </script>
         </body>
       </html>
     `;
@@ -109,55 +182,70 @@ export default function ChartScreen() {
             <ActivityIndicator size="large" color="#4DA8DA" />
           </View>
         ) : selectedSymbol ? (
-          <>
-            <View style={styles.chartContainer}>
-               <WebView 
-                 source={{ html: getTradingViewHTML(selectedSymbol, exchangeId) }}
-                 style={{ flex: 1, backgroundColor: '#020202' }}
-                 scrollEnabled={false}
-                 bounces={false}
-               />
-            </View>
-            
-            <ScrollView style={styles.detailsContainer}>
-              <NeoCard
-                title="Estado de Operación"
-                value={activePosition ? 'POSICIÓN ABIERTA' : 'ESPERANDO SEÑAL'}
-                trend={activePosition ? {
-                  value: `${activePosition.unrealizedPnl >= 0 ? '+' : ''}${activePosition.unrealizedPnl.toFixed(2)} USDT`,
-                  direction: activePosition.unrealizedPnl >= 0 ? 'up' : 'down'
-                } : undefined}
-              >
-                {activePosition ? (
-                  <View style={styles.positionDetails}>
-                    <Text style={styles.posText}><Text style={styles.boldText}>Lado:</Text> {activePosition.side.toUpperCase()}</Text>
-                    <Text style={styles.posText}><Text style={styles.boldText}>Entrada:</Text> {activePosition.entryPrice}</Text>
-                    <Text style={styles.posText}><Text style={styles.boldText}>Actual:</Text> {activePosition.markPrice}</Text>
-                    <Text style={styles.posText}><Text style={styles.boldText}>Apalancamiento:</Text> {activePosition.leverage}x</Text>
-                    <Text style={styles.posText}><Text style={styles.boldText}>Contratos:</Text> {activePosition.contracts}</Text>
-
-                    {activePosition.orders && activePosition.orders.length > 0 && (
-                      <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
-                        <Text style={[styles.boldText, { marginBottom: 8 }]}>Órdenes Pendientes:</Text>
-                        {activePosition.orders.map((ord, idx) => (
-                          <View key={idx} style={styles.orderRow}>
-                            <NeoBadge 
-                              label={ord.type} 
-                              variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'} 
-                            />
-                            <Text style={styles.posText}>{ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%)</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                ) : (
-                  <Text style={styles.text}>Monitoreando el mercado. Sin posiciones activas en este símbolo.</Text>
-                )}
-              </NeoCard>
-              <View style={{ height: 100 }} />
-            </ScrollView>
-          </>
+            <>
+              <View style={styles.chartContainer}>
+                 <WebView 
+                   ref={webviewRef}
+                   source={{ html: getTradingViewHTML() }}
+                   style={{ flex: 1, backgroundColor: '#020202' }}
+                   scrollEnabled={false}
+                   bounces={false}
+                   javaScriptEnabled={true}
+                 />
+              </View>
+              
+              <ScrollView style={styles.detailsContainer}>
+                <NeoCard
+                  title="Estado de Operación"
+                  value={activePosition ? 'POSICIÓN ABIERTA' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'ESPERANDO SEÑAL')}
+                  trend={activePosition ? {
+                    value: `${activePosition.unrealizedPnl >= 0 ? '+' : ''}${activePosition.unrealizedPnl.toFixed(2)} USDT`,
+                    direction: activePosition.unrealizedPnl >= 0 ? 'up' : 'down'
+                  } : undefined}
+                >
+                  {activePosition ? (
+                    <View style={styles.positionDetails}>
+                      <Text style={styles.posText}><Text style={styles.boldText}>Lado:</Text> {activePosition.side.toUpperCase()}</Text>
+                      <Text style={styles.posText}><Text style={styles.boldText}>Entrada:</Text> {activePosition.entryPrice}</Text>
+                      <Text style={styles.posText}><Text style={styles.boldText}>Actual:</Text> {activePosition.markPrice}</Text>
+                      <Text style={styles.posText}><Text style={styles.boldText}>Apalancamiento:</Text> {activePosition.leverage}x</Text>
+                      <Text style={styles.posText}><Text style={styles.boldText}>Contratos:</Text> {activePosition.contracts}</Text>
+  
+                      {activePosition.orders && activePosition.orders.length > 0 && (
+                        <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
+                          <Text style={[styles.boldText, { marginBottom: 8 }]}>Órdenes Pendientes de Salida:</Text>
+                          {activePosition.orders.map((ord, idx) => (
+                            <View key={idx} style={styles.orderRow}>
+                              <NeoBadge 
+                                label={ord.type} 
+                                variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'} 
+                              />
+                              <Text style={styles.posText}>{ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%)</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  ) : standaloneOrders.length > 0 ? (
+                    <View style={styles.positionDetails}>
+                      <Text style={[styles.boldText, { marginBottom: 8 }]}>Órdenes de Entrada Abiertas:</Text>
+                      {standaloneOrders.map((ord, idx) => (
+                        <View key={idx} style={styles.orderRow}>
+                          <NeoBadge 
+                            label={`${ord.side} ${ord.type}`} 
+                            variant={ord.side === 'BUY' ? 'success' : 'danger'} 
+                          />
+                          <Text style={styles.posText}>{ord.price.toFixed(4)} (Cant: {ord.amount})</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.text}>Monitoreando el mercado. Sin posiciones activas en este símbolo.</Text>
+                  )}
+                </NeoCard>
+                <View style={{ height: 100 }} />
+              </ScrollView>
+            </>
         ) : (
           <View style={styles.emptyContainer}>
              <Text style={styles.text}>No hay símbolos activos</Text>

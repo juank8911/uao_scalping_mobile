@@ -13,8 +13,16 @@ export default function DashboardScreen() {
     const fetchStatus = async () => {
       const data = await getStatus();
       setStatus(data);
-      if (!selectedSymbol && data.active_symbols && data.active_symbols.length > 0) {
-        setSelectedSymbol(data.active_symbols[0]);
+      if (data.active_symbols && data.active_symbols.length > 0) {
+        // Usa una función de callback para leer el valor actualizado del state sin depender de selectedSymbol en el array de dependencias
+        setSelectedSymbol((prev) => {
+          if (!prev || !data.active_symbols.includes(prev)) {
+            return data.active_symbols[0];
+          }
+          return prev;
+        });
+      } else {
+        setSelectedSymbol(null);
       }
     };
 
@@ -99,6 +107,23 @@ export default function DashboardScreen() {
 
         <View style={{ height: 24 }} />
 
+        <NeoCard
+          title="Estado del Motor"
+          value={status && status.is_running ? (status.status.toUpperCase() || 'PROCESANDO...') : 'DETENIDO'}
+          trend={{
+            value: status?.is_running ? 'EN LÍNEA' : 'OFFLINE',
+            direction: status?.is_running ? 'up' : 'down'
+          }}
+        >
+          <Text style={styles.text}>
+            {status?.is_running 
+              ? 'El bot está ejecutando este paso actualmente.' 
+              : 'Enciende el motor para comenzar a operar.'}
+          </Text>
+        </NeoCard>
+
+        <View style={{ height: 24 }} />
+
         <View style={{ height: 24 }} />
 
         <View style={styles.headerRow}>
@@ -116,12 +141,13 @@ export default function DashboardScreen() {
           if (!status || !selectedSymbol) return null;
           const symbol = selectedSymbol;
           const position = status.open_positions?.find((p) => p.symbol === symbol);
+          const standaloneOrders = status.open_orders?.filter(o => o.symbol === symbol) || [];
           
           return (
             <View key={symbol} style={{ marginBottom: 16 }}>
               <NeoCard
                 title={symbol}
-                value={position ? 'EN POSICIÓN' : 'MONITOREANDO'}
+                value={position ? 'EN POSICIÓN' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'MONITOREANDO')}
                 trend={position ? {
                   value: `${position.unrealizedPnl >= 0 ? '+' : ''}${position.unrealizedPnl.toFixed(2)} USDT`,
                   direction: position.unrealizedPnl >= 0 ? 'up' : 'down'
@@ -136,7 +162,7 @@ export default function DashboardScreen() {
                     
                     {position.orders && position.orders.length > 0 && (
                       <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 8 }}>
-                        <Text style={styles.boldText}>Órdenes Pendientes:</Text>
+                        <Text style={styles.boldText}>Órdenes Pendientes de Salida:</Text>
                         {position.orders.map((ord, idx) => (
                           <Text key={idx} style={styles.posText}>
                             • {ord.type}: {ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%)
@@ -145,8 +171,29 @@ export default function DashboardScreen() {
                       </View>
                     )}
                   </View>
+                ) : standaloneOrders.length > 0 ? (
+                  <View style={styles.positionDetails}>
+                    <Text style={[styles.boldText, { marginBottom: 8 }]}>Órdenes de Entrada Abiertas:</Text>
+                    {standaloneOrders.map((ord, idx) => (
+                      <View key={idx} style={{ marginBottom: 4 }}>
+                        <NeoBadge 
+                          label={`${ord.side} ${ord.type}`} 
+                          variant={ord.side === 'BUY' ? 'success' : 'danger'} 
+                        />
+                        <Text style={styles.posText}>Precio: {ord.price.toFixed(4)} | Cant: {ord.amount}</Text>
+                      </View>
+                    ))}
+                  </View>
                 ) : (
-                  <Text style={styles.text}>Buscando oportunidades de entrada...</Text>
+                  <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+                    <Text style={[styles.text, { fontSize: 14, color: '#A0A0A0' }]}>Estado Actual del Bot:</Text>
+                    <Text style={[styles.boldText, { color: '#4DA8DA', marginTop: 8, textAlign: 'center', fontSize: 16 }]}>
+                        {status.status.toUpperCase()}
+                    </Text>
+                    <Text style={[styles.text, { marginTop: 12, textAlign: 'center', fontSize: 13, color: '#808080' }]}>
+                        El bot está ejecutando esta acción en el mercado ahora mismo.
+                    </Text>
+                  </View>
                 )}
               </NeoCard>
             </View>

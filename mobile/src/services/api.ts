@@ -29,6 +29,7 @@ export interface SystemStatus {
   execution_mode: string;
   global_balance?: number;
   open_positions?: PositionInfo[];
+  open_orders?: any[];
 }
 
 export interface UpdateConfig {
@@ -142,6 +143,32 @@ export const stopEngine = async (): Promise<any> => {
     console.error('Error stopping engine:', error);
     // Mock fallback for sandbox
     return { message: "Engine stop sequence initiated. (MOCKED)" };
+  }
+};
+
+export const fetchChartData = async (symbol: string) => {
+  try {
+    const response = await fetchWithAuth(`${BASE_URL}/chart/ohlcv?symbol=${encodeURIComponent(symbol)}`, {
+      method: 'GET',
+    });
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching chart data:', error);
+    return [];
+  }
+};
+
+export const fetchChartTrades = async (symbol: string) => {
+  try {
+    const response = await fetchWithAuth(`${BASE_URL}/chart/trades?symbol=${encodeURIComponent(symbol)}`, {
+      method: 'GET',
+    });
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('Error fetching chart trades:', error);
+    return [];
   }
 };
 
