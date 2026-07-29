@@ -154,6 +154,7 @@ export default function DashboardScreen() {
         {(() => {
           if (!status || !selectedSymbol) return null;
           const symbol = selectedSymbol;
+          const isPaper = status.execution_mode === 'PAPER_TRADING';
           const position = status.open_positions?.find((p) => p.symbol === symbol);
           const standaloneOrders = status.open_orders?.filter(o => o.symbol === symbol) || [];
           
@@ -170,7 +171,13 @@ export default function DashboardScreen() {
               >
                 <NeoCard
                   title={symbol}
-                  value={position ? 'EN POSICIÓN' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'MONITOREANDO')}
+                  value={
+                    position
+                      ? (isPaper ? 'EN POSICIÓN (SIMULADO)' : 'EN POSICIÓN')
+                      : (standaloneOrders.length > 0
+                          ? (isPaper ? 'ORDEN PENDIENTE (SIMULADO)' : 'ÓRDENES PENDIENTES')
+                          : 'MONITOREANDO')
+                  }
                   trend={position ? {
                     value: `${position.unrealizedPnl >= 0 ? '+' : ''}${position.unrealizedPnl.toFixed(2)} USDT`,
                     direction: position.unrealizedPnl >= 0 ? 'up' : 'down'
@@ -178,6 +185,12 @@ export default function DashboardScreen() {
                 >
                 {position ? (
                   <View style={styles.positionDetails}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <NeoBadge
+                        label={isPaper ? '🧪 SIMULADO' : 'REAL'}
+                        variant={isPaper ? 'warning' : 'primary'}
+                      />
+                    </View>
                     <Text style={styles.posText}><Text style={styles.boldText}>Lado:</Text> {position.side.toUpperCase()}</Text>
                     <Text style={styles.posText}><Text style={styles.boldText}>Entrada:</Text> {position.entryPrice}</Text>
                     <Text style={styles.posText}><Text style={styles.boldText}>Actual:</Text> {position.markPrice}</Text>
@@ -217,14 +230,24 @@ export default function DashboardScreen() {
                             </Text>
                         </View>
                     )}
-                    <Text style={[styles.boldText, { marginBottom: 8 }]}>Órdenes de Entrada Abiertas:</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={styles.boldText}>Órdenes de Entrada Abiertas:</Text>
+                      <View style={{ width: 8 }} />
+                      <NeoBadge
+                        label={isPaper ? '🧪 SIMULADO' : 'REAL'}
+                        variant={isPaper ? 'warning' : 'primary'}
+                      />
+                    </View>
                     {standaloneOrders.map((ord, idx) => (
-                      <View key={idx} style={{ marginBottom: 4 }}>
+                      <View key={idx} style={{ marginBottom: 10 }}>
                         <NeoBadge 
                           label={`${ord.side} ${ord.type}`} 
                           variant={ord.side === 'BUY' ? 'success' : 'danger'} 
                         />
                         <Text style={styles.posText}>Precio: {ord.price.toFixed(4)} | Cant: {ord.amount}</Text>
+                        <Text style={[styles.text, { marginTop: 2 }]}>
+                          Estado: {ord.status === 'pending (simulado)' ? 'Esperando que el precio la toque…' : ord.status}
+                        </Text>
                       </View>
                     ))}
                   </View>

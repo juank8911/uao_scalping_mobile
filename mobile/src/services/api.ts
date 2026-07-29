@@ -4,11 +4,30 @@ import { resetToLogin } from '../navigation/navigationRef';
 const API_BASE_URL = 'http://192.168.0.9:8000/api/v1';
 const BASE_URL = `${API_BASE_URL}/control`;
 
-export interface OrderInfo {
+// Órdenes TP/SL "adjuntas" a una posición ya abierta (PositionInfo.orders)
+export interface AttachedOrderInfo {
   type: string;
   price: number;
   distance_pct: number;
 }
+
+// Órdenes de ENTRADA standalone (aún no hay posición abierta), tal como las devuelve
+// GET /control/status en `open_orders`. En modo LIVE/TESTNET son órdenes límite reales
+// esperando fill en el exchange; en modo PAPER_TRADING son órdenes simuladas
+// "colocadas en el libro" esperando a que el precio las toque (alerta de precio).
+// `status` distingue el caso simulado: viene como "pending (simulado)".
+export interface StandaloneOrderInfo {
+  symbol: string;
+  type: string;
+  side: string;
+  price: number;
+  amount: number;
+  status: string;
+}
+
+// Alias retrocompatible por si algo del código viejo todavía referencia OrderInfo
+// como las órdenes adjuntas a una posición.
+export type OrderInfo = AttachedOrderInfo;
 
 export interface PositionInfo {
   symbol: string;
@@ -18,7 +37,7 @@ export interface PositionInfo {
   markPrice: number;
   unrealizedPnl: number;
   leverage: number;
-  orders?: OrderInfo[];
+  orders?: AttachedOrderInfo[];
 }
 
 export interface SystemStatus {
@@ -29,7 +48,7 @@ export interface SystemStatus {
   execution_mode: string;
   global_balance: number;
   open_positions: PositionInfo[];
-  open_orders: OrderInfo[];
+  open_orders: StandaloneOrderInfo[];
   latest_prices: Record<string, number>;
 }
 
