@@ -13,7 +13,7 @@
     "expo-local-authentication": "~17.0.8",
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
-    "jeikei-design-system": "file:../../UAO_scalpin_style/jeikei-design-system",
+    "jeikei-design-system": "file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
