@@ -13,7 +13,7 @@
     "expo-local-authentication": "~17.0.8",
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
-    "jeikei-design-system": "https://github.com/juank8911/jeikei-design-system/tarball/0a09660f0401c79e1d34002f4938635f9512ff27",
+    "jeikei-design-system": "https://github.com/juank8911/jeikei-design-system/tarball/main",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
