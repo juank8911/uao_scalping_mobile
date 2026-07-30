@@ -10,6 +10,36 @@ interface PositionChartModalProps {
   position: PositionInfo | null;
 }
 
+// Simple horizontal price line overlay (wagmi-charts has no PriceLine component)
+function PriceLine({ label, color }: { label: string; color: string }) {
+  return (
+    <View style={[priceLineStyles.container]}>
+      <View style={[priceLineStyles.line, { borderColor: color }]} />
+      <Text style={[priceLineStyles.label, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
+const priceLineStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  line: {
+    flex: 1,
+    borderTopWidth: 1,
+    borderStyle: 'dashed',
+  },
+  label: {
+    fontSize: 10,
+    marginLeft: 4,
+    fontWeight: 'bold',
+  },
+});
+
 export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible, onClose, position }) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -94,24 +124,21 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
               <ActivityIndicator size="large" color="#fff" />
             ) : data.length > 0 ? (
               <CandlestickChart.Provider data={data}>
-                <CandlestickChart>
-                  <CandlestickChart.Candles />
-                  <CandlestickChart.Crosshair />
-                  
-                  {/* Entry Line */}
-                  <CandlestickChart.PriceLine price={position.entryPrice} color="#3498db" />
-                  
-                  {/* TP Line */}
-                  {tpPrice > 0 && (
-                     <CandlestickChart.PriceLine price={tpPrice} color="#2ecc71" />
-                  )}
-                  
-                  {/* SL Line */}
-                  {slPrice > 0 && (
-                     <CandlestickChart.PriceLine price={slPrice} color="#e74c3c" />
-                  )}
+                <View style={{ position: 'relative' }}>
+                  <CandlestickChart>
+                    <CandlestickChart.Candles />
+                    <CandlestickChart.Crosshair />
+                  </CandlestickChart>
 
-                </CandlestickChart>
+                  {/* Price lines overlay */}
+                  <PriceLine label={`Entry ${position.entryPrice}`} color="#3498db" />
+                  {tpPrice > 0 && (
+                    <PriceLine label={`TP ${tpPrice}`} color="#2ecc71" />
+                  )}
+                  {slPrice > 0 && (
+                    <PriceLine label={`SL ${slPrice}`} color="#e74c3c" />
+                  )}
+                </View>
                 <CandlestickChart.DatetimeText style={styles.chartLabel} />
                 <CandlestickChart.PriceText type="open" style={styles.chartLabel} />
               </CandlestickChart.Provider>
