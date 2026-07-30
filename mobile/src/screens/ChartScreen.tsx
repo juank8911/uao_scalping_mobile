@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator
 import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/native';
 import { NeoModal } from '../components/NeoModal';
 import { getStatus, SystemStatus, PositionInfo, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory } from '../services/api';
-import { WebView } from 'react-native-webview';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
 
 export default function ChartScreen() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -63,7 +63,7 @@ export default function ChartScreen() {
             ...(currentPosition?.orders || []).map(o => ({ 
                 price: o.price, 
                 type: o.type, 
-                side: currentPosition.side === 'long' ? 'SELL' : 'BUY' 
+                side: currentPosition?.side === 'long' ? 'SELL' : 'BUY' 
             }))
         ];
         
@@ -227,6 +227,7 @@ export default function ChartScreen() {
         ) : selectedSymbol ? (
             <>
               <View style={styles.chartContainer}>
+                 {/* @ts-ignore - WebView types conflict with React 19 */}
                  <WebView 
                    ref={webviewRef}
                    source={{ html: getTradingViewHTML() }}
@@ -236,7 +237,7 @@ export default function ChartScreen() {
                    javaScriptEnabled={true}
                    originWhitelist={['*']}
                    onLoadEnd={() => setIsWebViewLoaded(true)}
-                   onMessage={(event) => {
+                   onMessage={(event: WebViewMessageEvent) => {
                      try {
                        const data = JSON.parse(event.nativeEvent.data);
                        if (data.type === 'error') {
