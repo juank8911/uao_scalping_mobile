@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, Switch, Alert, TouchableOpacity, Modal, FlatList } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Switch, Alert, TouchableOpacity, FlatList } from 'react-native';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/native';
+import { NeoModal } from '../components/NeoModal';
 import { getStatus, SystemStatus, startEngine, stopEngine, PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 import { PositionChartModal } from '../components/PositionChartModal';
@@ -289,41 +290,50 @@ export default function DashboardScreen() {
         position={selectedPosition}
       />
 
-      <Modal visible={isDropdownVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Seleccionar Símbolo</Text>
-            {status?.active_symbols && status.active_symbols.length > 0 ? (
-              <FlatList
-                data={status.active_symbols}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => {
-                      setSelectedSymbol(item);
-                      setDropdownVisible(false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.modalItemText, 
-                      selectedSymbol === item && { color: '#4DA8DA', fontWeight: 'bold' }
-                    ]}>
-                      {item}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-            ) : (
-               <Text style={styles.text}>Ningún símbolo activo disponible.</Text>
+      <NeoModal
+        visible={isDropdownVisible}
+        title="Seleccionar Símbolo"
+        onClose={() => setDropdownVisible(false)}
+      >
+        {status?.active_symbols && status.active_symbols.length > 0 ? (
+          <FlatList
+            data={status.active_symbols}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={{
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: selectedSymbol === item ? 'rgba(52, 216, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  backgroundColor: selectedSymbol === item ? 'rgba(52, 216, 255, 0.06)' : 'transparent',
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                }}
+                onPress={() => {
+                  setSelectedSymbol(item);
+                  setDropdownVisible(false);
+                }}
+              >
+                <Text style={{
+                  color: selectedSymbol === item ? '#34d8ff' : 'rgba(255, 255, 255, 0.7)',
+                  fontSize: 15,
+                  fontWeight: selectedSymbol === item ? 'bold' : 'normal',
+                  textAlign: 'center',
+                  letterSpacing: selectedSymbol === item ? 1 : 0,
+                }}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
             )}
-            <View style={{ height: 16 }} />
-            <NeoButton variant="outline" size="md" onPress={() => setDropdownVisible(false)}>
-              Cerrar
-            </NeoButton>
-          </View>
-        </View>
-      </Modal>
+          />
+        ) : (
+          <Text style={styles.text}>Ningún símbolo activo disponible.</Text>
+        )}
+        <View style={{ height: 16 }} />
+        <NeoButton variant="outline" size="md" onPress={() => setDropdownVisible(false)}>
+          Cerrar
+        </NeoButton>
+      </NeoModal>
     </NeoLayout>
   );
 }
@@ -387,35 +397,5 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 12,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 24,
-    maxHeight: '80%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  modalItem: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalItemText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-  }
+
 });

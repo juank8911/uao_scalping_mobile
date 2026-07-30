@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { NeoCard, NeoButton } from 'jeikei-design-system/native';
+import { NeoModal } from './NeoModal';
 import { CandlestickChart } from 'react-native-wagmi-charts';
 import { PositionInfo, fetchChartData } from '../services/api';
 
@@ -86,38 +87,30 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
   const isLong = position.side.toLowerCase() === 'long';
 
   return (
-    <Modal visible={visible} transparent={true} animationType="slide">
-      <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
-          <View style={styles.header}>
-            <Text style={styles.title}>{position.symbol} (5m)</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeBtn}>X</Text>
-            </TouchableOpacity>
+    <NeoModal visible={visible} onClose={onClose} title={`${position.symbol} (5m)`} fullHeight>
+      <View style={{ flex: 1, minHeight: 450 }}>
+        <NeoCard title="Current Position" value={isLong ? 'LONG' : 'SHORT'} trend={{ value: `${position.unrealizedPnl.toFixed(2)} USDT`, direction: position.unrealizedPnl >= 0 ? 'up' : 'down' }}>
+          <View style={styles.statsRow}>
+            <View style={styles.statCol}>
+              <Text style={styles.statLabel}>Entry Price</Text>
+              <Text style={styles.statValue}>{position.entryPrice}</Text>
+            </View>
+            <View style={styles.statCol}>
+              <Text style={styles.statLabel}>Mark Price</Text>
+              <Text style={styles.statValue}>{position.markPrice}</Text>
+            </View>
           </View>
-
-          <NeoCard title="Current Position" value={isLong ? 'LONG' : 'SHORT'} trend={{ value: `${position.unrealizedPnl.toFixed(2)} USDT`, direction: position.unrealizedPnl >= 0 ? 'up' : 'down' }}>
-            <View style={styles.statsRow}>
-              <View style={styles.statCol}>
-                <Text style={styles.statLabel}>Entry Price</Text>
-                <Text style={styles.statValue}>{position.entryPrice}</Text>
-              </View>
-              <View style={styles.statCol}>
-                <Text style={styles.statLabel}>Mark Price</Text>
-                <Text style={styles.statValue}>{position.markPrice}</Text>
-              </View>
+          <View style={styles.statsRow}>
+            <View style={styles.statCol}>
+              <Text style={styles.statLabel}>Take Profit</Text>
+              <Text style={[styles.statValue, { color: '#4ade80' }]}>{tpPrice ? tpPrice : 'N/A'} ({tpDist.toFixed(2)}%)</Text>
             </View>
-            <View style={styles.statsRow}>
-              <View style={styles.statCol}>
-                <Text style={styles.statLabel}>Take Profit</Text>
-                <Text style={[styles.statValue, { color: '#00ff00' }]}>{tpPrice ? tpPrice : 'N/A'} ({tpDist.toFixed(2)}%)</Text>
-              </View>
-              <View style={styles.statCol}>
-                <Text style={styles.statLabel}>Stop Loss</Text>
-                <Text style={[styles.statValue, { color: '#ff0000' }]}>{slPrice ? slPrice : 'N/A'} ({slDist.toFixed(2)}%)</Text>
-              </View>
+            <View style={styles.statCol}>
+              <Text style={styles.statLabel}>Stop Loss</Text>
+              <Text style={[styles.statValue, { color: '#f87171' }]}>{slPrice ? slPrice : 'N/A'} ({slDist.toFixed(2)}%)</Text>
             </View>
-          </NeoCard>
+          </View>
+        </NeoCard>
 
           <View style={styles.chartContainer}>
             {loading ? (
@@ -130,14 +123,14 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
                     <CandlestickChart.Crosshair />
                   </CandlestickChart>
 
-                  {/* Price lines overlay */}
-                  <PriceLine label={`Entry ${position.entryPrice}`} color="#3498db" />
-                  {tpPrice > 0 && (
-                    <PriceLine label={`TP ${tpPrice}`} color="#2ecc71" />
-                  )}
-                  {slPrice > 0 && (
-                    <PriceLine label={`SL ${slPrice}`} color="#e74c3c" />
-                  )}
+                {/* Price lines overlay */}
+                <PriceLine label={`Entry ${position.entryPrice}`} color="#34d8ff" />
+                {tpPrice > 0 && (
+                  <PriceLine label={`TP ${tpPrice}`} color="#4ade80" />
+                )}
+                {slPrice > 0 && (
+                  <PriceLine label={`SL ${slPrice}`} color="#f87171" />
+                )}
                 </View>
                 <CandlestickChart.DatetimeText style={styles.chartLabel} />
                 <CandlestickChart.PriceText type="open" style={styles.chartLabel} />
@@ -147,44 +140,17 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
             )}
           </View>
           
-          <NeoButton variant="primary" size="md" onPress={onClose}>
-            Cerrar Gráfico
-          </NeoButton>
-        </View>
+        <View style={{ height: 16 }} />
+        <NeoButton variant="primary" size="md" onPress={onClose}>
+          Cerrar Gráfico
+        </NeoButton>
       </View>
-    </Modal>
+    </NeoModal>
   );
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'flex-end',
-  },
-  modalContainer: {
-    backgroundColor: '#121212',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 20,
-    height: '85%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  closeBtn: {
-    color: '#aaa',
-    fontSize: 20,
-    padding: 8,
-  },
+
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

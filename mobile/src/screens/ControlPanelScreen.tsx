@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, Alert, ScrollView, Modal, TouchableOpacity, FlatList } from 'react-native';
+import { StyleSheet, View, Text, Alert, ScrollView, TouchableOpacity, FlatList } from 'react-native';
 import { NeoLayout, NeoCard, NeoInput, NeoButton, NeoBadge } from 'jeikei-design-system/native';
+import { NeoModal } from '../components/NeoModal';
 import { startEngine, stopEngine, updateConfig, getConfig, getCredentials, saveCredentials, ConfigResponse, CredentialResponse } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 
@@ -297,31 +298,44 @@ export default function ControlPanelScreen() {
           </NeoCard>
         )}
 
-        <Modal visible={isExchangeModalVisible} transparent={true} animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Exchange</Text>
-              <FlatList
-                data={EXCHANGES}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => {
-                      setExchangeId(item);
-                      setIsExchangeModalVisible(false);
-                    }}
-                  >
-                    <Text style={styles.modalItemText}>{item.toUpperCase()}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-              <NeoButton variant="outline" size="md" onPress={() => setIsExchangeModalVisible(false)}>
-                Cancel
-              </NeoButton>
-            </View>
-          </View>
-        </Modal>
+        <NeoModal 
+          visible={isExchangeModalVisible} 
+          title="Select Exchange" 
+          onClose={() => setIsExchangeModalVisible(false)}
+        >
+          <FlatList
+            data={EXCHANGES}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={{
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: exchangeId === item ? 'rgba(52, 216, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  backgroundColor: exchangeId === item ? 'rgba(52, 216, 255, 0.06)' : 'transparent',
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                }}
+                onPress={() => {
+                  setExchangeId(item);
+                  setIsExchangeModalVisible(false);
+                }}
+              >
+                <Text style={{
+                  color: exchangeId === item ? '#34d8ff' : 'rgba(255, 255, 255, 0.7)',
+                  fontSize: 15,
+                  fontWeight: exchangeId === item ? 'bold' : 'normal',
+                  textAlign: 'center',
+                  letterSpacing: exchangeId === item ? 1 : 0,
+                }}>{item.toUpperCase()}</Text>
+              </TouchableOpacity>
+            )}
+          />
+          <View style={{ height: 16 }} />
+          <NeoButton variant="outline" size="md" onPress={() => setIsExchangeModalVisible(false)}>
+            Cancel
+          </NeoButton>
+        </NeoModal>
 
       </ScrollView>
     </NeoLayout>
@@ -382,35 +396,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 24,
-    maxHeight: '80%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  modalItem: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalItemText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-  }
+
 });

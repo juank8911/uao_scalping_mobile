@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Modal, FlatList, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Platform, FlatList } from 'react-native';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/native';
+import { NeoModal } from '../components/NeoModal';
 import { getStatus, SystemStatus, PositionInfo, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory } from '../services/api';
 import { WebView } from 'react-native-webview';
 
@@ -41,12 +42,7 @@ export default function ChartScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  const activePosition: PositionInfo | undefined = status?.open_positions?.find(
-    (p) => p.symbol === selectedSymbol
-  );
-  const standaloneOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
-
-  // Refrescar los datos del gráfico cuando cambia el símbolo o el estado (para inyectar)
+  // Refrescar los datos del gráfico cuando cambia el símbolo o el estado
   useEffect(() => {
     if (!selectedSymbol || !webviewRef.current || !isWebViewLoaded) return;
     
@@ -57,12 +53,17 @@ export default function ChartScreen() {
         const historyData = await fetchChartHistory(selectedSymbol);
         setHistory(historyData);
         
+        // FIX: Recalcular órdenes DENTRO del effect con el símbolo actual
+        // para evitar closure stale de standaloneOrders/activePosition
+        const currentPosition = status?.open_positions?.find(p => p.symbol === selectedSymbol);
+        const currentOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
+        
         const chartOrders = [
-            ...standaloneOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
-            ...(activePosition?.orders || []).map(o => ({ 
+            ...currentOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
+            ...(currentPosition?.orders || []).map(o => ({ 
                 price: o.price, 
                 type: o.type, 
-                side: activePosition.side === 'long' ? 'SELL' : 'BUY' 
+                side: currentPosition.side === 'long' ? 'SELL' : 'BUY' 
             }))
         ];
         
@@ -80,6 +81,12 @@ export default function ChartScreen() {
 
     updateChart();
   }, [selectedSymbol, status, isWebViewLoaded]);
+
+  // Computed values for display (used in JSX, NOT in the effect above)
+  const activePosition: PositionInfo | undefined = status?.open_positions?.find(
+    (p) => p.symbol === selectedSymbol
+  );
+  const standaloneOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
 
   const getTradingViewHTML = () => {
     return `
@@ -103,8 +110,8 @@ export default function ChartScreen() {
                     textColor: '#d1d4dc',
                 },
                 grid: {
-                    vertLines: { color: 'rgba(255, 255, 255, 0.06)' },
-                    horzLines: { color: 'rgba(255, 255, 255, 0.06)' },
+                    vertLines: { color: 'rgba(52, 216, 255, 0.04)' },
+                    horzLines: { color: 'rgba(52, 216, 255, 0.04)' },
                 },
                 timeScale: {
                     timeVisible: true,
@@ -113,11 +120,11 @@ export default function ChartScreen() {
             });
 
             const candleSeries = chart.addCandlestickSeries({
-                upColor: '#26a69a',
-                downColor: '#ef5350',
+                upColor: '#4ade80',
+                downColor: '#f87171',
                 borderVisible: false,
-                wickUpColor: '#26a69a',
-                wickDownColor: '#ef5350'
+                wickUpColor: '#4ade80',
+                wickDownColor: '#f87171'
             });
 
             let currentLines = [];
@@ -129,15 +136,29 @@ export default function ChartScreen() {
 
             window.updateChartData = function(data, trades, orders) {
                 try {
+                    // FIX 1: Limpiar markers antiguos SIEMPRE (evita markers fantasma)
+                    candleSeries.setMarkers([]);
+                    
+                    // FIX 2: Limpiar price lines antiguas SIEMPRE
+                    if (typeof currentLines !== 'undefined') {
+                        currentLines.forEach(line => candleSeries.removePriceLine(line));
+                        currentLines = [];
+                    }
+
+                    // 3. Setear nuevos datos
                     if (data && data.length > 0) {
                         candleSeries.setData(data);
                     }
 
+                    // FIX 3: AUTO-FIT al rango del nuevo símbolo
+                    chart.timeScale().fitContent();
+
+                    // 4. Pintar nuevos markers
                     if (trades && trades.length > 0) {
                         const markers = trades.map(t => ({
                             time: t.time,
                             position: t.side === 'buy' ? 'belowBar' : 'aboveBar',
-                            color: t.side === 'buy' ? '#26a69a' : '#ef5350',
+                            color: t.side === 'buy' ? '#4ade80' : '#f87171',
                             shape: t.side === 'buy' ? 'arrowUp' : 'arrowDown',
                             text: t.side === 'buy' ? 'B' : 'S'
                         }));
@@ -158,14 +179,12 @@ export default function ChartScreen() {
                         }
                     }
 
-                    currentLines.forEach(line => candleSeries.removePriceLine(line));
-                    currentLines = [];
-
+                    // 5. Pintar nuevas price lines
                     if (orders) {
                         orders.forEach(ord => {
-                            let lineColor = ord.side === 'BUY' ? '#26a69a' : '#ef5350';
-                            if (ord.type === 'TAKE_PROFIT') lineColor = '#26a69a';
-                            if (ord.type === 'STOP_LOSS') lineColor = '#ef5350';
+                            let lineColor = ord.side === 'BUY' ? '#4ade80' : '#f87171';
+                            if (ord.type === 'TAKE_PROFIT') lineColor = '#4ade80';
+                            if (ord.type === 'STOP_LOSS') lineColor = '#f87171';
 
                             const line = candleSeries.createPriceLine({
                                 price: ord.price,
@@ -203,7 +222,7 @@ export default function ChartScreen() {
 
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4DA8DA" />
+            <ActivityIndicator size="large" color="#34d8ff" />
           </View>
         ) : selectedSymbol ? (
             <>
@@ -246,7 +265,7 @@ export default function ChartScreen() {
                       <Text style={styles.posText}><Text style={styles.boldText}>Contratos:</Text> {activePosition.contracts}</Text>
   
                       {activePosition.orders && activePosition.orders.length > 0 && (
-                        <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
+                        <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(52, 216, 255, 0.1)' }}>
                           <Text style={[styles.boldText, { marginBottom: 8 }]}>Órdenes Pendientes de Salida:</Text>
                           {activePosition.orders.map((ord, idx) => (
                             <View key={idx} style={styles.orderRow}>
@@ -281,14 +300,14 @@ export default function ChartScreen() {
                 {history.length > 0 && (
                   <NeoCard title="Historial de Órdenes (Últimas 6)">
                     {history.map((trade, idx) => (
-                      <View key={idx} style={[styles.orderRow, { marginBottom: 12, paddingBottom: 12, borderBottomWidth: idx === history.length - 1 ? 0 : 1, borderBottomColor: 'rgba(255,255,255,0.1)' }]}>
+                      <View key={idx} style={[styles.orderRow, { marginBottom: 12, paddingBottom: 12, borderBottomWidth: idx === history.length - 1 ? 0 : 1, borderBottomColor: 'rgba(52, 216, 255, 0.08)' }]}>
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                             <NeoBadge 
                               label={trade.side} 
                               variant={trade.side === 'BUY' ? 'success' : 'danger'} 
                             />
-                            <Text style={[styles.text, { fontSize: 12, marginLeft: 8, color: '#aaa' }]}>
+                            <Text style={[styles.text, { fontSize: 12, marginLeft: 8, color: 'rgba(255,255,255,0.4)' }]}>
                               {new Date(trade.time * 1000).toLocaleTimeString()}
                             </Text>
                           </View>
@@ -296,7 +315,7 @@ export default function ChartScreen() {
                           <Text style={[styles.text, { fontSize: 13 }]}>Salida: {trade.exitPrice.toFixed(4)}</Text>
                         </View>
                         <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                          <Text style={[styles.boldText, { color: trade.pnl >= 0 ? '#26a69a' : '#ef5350', fontSize: 16 }]}>
+                          <Text style={[styles.boldText, { color: trade.pnl >= 0 ? '#4ade80' : '#f87171', fontSize: 16 }]}>
                             {trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(2)} USDT
                           </Text>
                         </View>
@@ -315,41 +334,50 @@ export default function ChartScreen() {
         )}
       </View>
 
-      <Modal visible={isDropdownVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Seleccionar Símbolo</Text>
-            {status?.active_symbols && status.active_symbols.length > 0 ? (
-              <FlatList
-                data={status.active_symbols}
-                keyExtractor={(item) => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.modalItem}
-                    onPress={() => {
-                      setSelectedSymbol(item);
-                      setDropdownVisible(false);
-                    }}
-                  >
-                    <Text style={[
-                      styles.modalItemText, 
-                      selectedSymbol === item && { color: '#4DA8DA', fontWeight: 'bold' }
-                    ]}>
-                      {item}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-            ) : (
-               <Text style={styles.text}>Ningún símbolo activo disponible.</Text>
+      <NeoModal
+        visible={isDropdownVisible}
+        title="Seleccionar Símbolo"
+        onClose={() => setDropdownVisible(false)}
+      >
+        {status?.active_symbols && status.active_symbols.length > 0 ? (
+          <FlatList
+            data={status.active_symbols}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={{
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: selectedSymbol === item ? 'rgba(52, 216, 255, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                  backgroundColor: selectedSymbol === item ? 'rgba(52, 216, 255, 0.06)' : 'transparent',
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                }}
+                onPress={() => {
+                  setSelectedSymbol(item);
+                  setDropdownVisible(false);
+                }}
+              >
+                <Text style={{
+                  color: selectedSymbol === item ? '#34d8ff' : 'rgba(255, 255, 255, 0.7)',
+                  fontSize: 15,
+                  fontWeight: selectedSymbol === item ? 'bold' : 'normal',
+                  textAlign: 'center',
+                  letterSpacing: selectedSymbol === item ? 1 : 0,
+                }}>
+                  {item}
+                </Text>
+              </TouchableOpacity>
             )}
-            <View style={{ height: 16 }} />
-            <NeoButton variant="outline" size="md" onPress={() => setDropdownVisible(false)}>
-              Cerrar
-            </NeoButton>
-          </View>
-        </View>
-      </Modal>
+          />
+        ) : (
+           <Text style={styles.text}>Ningún símbolo activo disponible.</Text>
+        )}
+        <View style={{ height: 16 }} />
+        <NeoButton variant="outline" size="md" onPress={() => setDropdownVisible(false)}>
+          Cerrar
+        </NeoButton>
+      </NeoModal>
 
     </NeoLayout>
   );
@@ -373,16 +401,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   dropdownBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(52, 216, 255, 0.06)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(52, 216, 255, 0.2)',
   },
   dropdownText: {
-    color: '#fff',
+    color: '#34d8ff',
     fontWeight: 'bold',
+    fontSize: 12,
+    letterSpacing: 0.5,
   },
   chartContainer: {
     height: 350,
@@ -390,7 +420,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#020202',
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(52, 216, 255, 0.08)',
   },
   detailsContainer: {
     flex: 1,
@@ -425,7 +455,7 @@ const styles = StyleSheet.create({
   },
   boldText: {
     fontWeight: 'bold',
-    color: '#4DA8DA',
+    color: '#34d8ff',
   },
   orderRow: {
     flexDirection: 'row',
@@ -433,35 +463,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 24,
-    maxHeight: '80%',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  modalItem: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalItemText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-  }
 });
