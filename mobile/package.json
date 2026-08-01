@@ -8,16 +8,17 @@
     "@react-navigation/native": "^6.1.9",
     "@react-navigation/native-stack": "^6.9.17",
     "@shopify/react-native-skia": "2.2.12",
+    "buffer": "^6.0.3",
     "expo": "57.0.8",
     "expo-blur": "~15.0.8",
     "expo-local-authentication": "~17.0.8",
     "expo-secure-store": "~15.0.8",
     "expo-status-bar": "~3.0.9",
-    "jeikei-design-system": "file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz",
+    "jeikei-design-system": "git+https://github.com/juank8911/jeikei-design-system.git",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
-    "react-native-gesture-handler": "~3.1.0",
+    "react-native-gesture-handler": "~2.28.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
@@ -28,7 +29,7 @@
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
-    "@types/react": "~19.2.3",
+    "@types/react": "~19.1.10",
     "typescript": "~5.9.2"
   },
   "scripts": {

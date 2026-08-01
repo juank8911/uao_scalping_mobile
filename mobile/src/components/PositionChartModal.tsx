@@ -11,34 +11,64 @@ interface PositionChartModalProps {
   position: PositionInfo | null;
 }
 
-// Simple horizontal price line overlay (wagmi-charts has no PriceLine component)
-function PriceLine({ label, color }: { label: string; color: string }) {
+import { useCandlestickChart } from 'react-native-wagmi-charts';
+
+// Component that dynamically positions price lines based on chart domain
+function ChartPriceLines({ entryPrice, tpPrice, slPrice }: { entryPrice: number, tpPrice: number, slPrice: number }) {
+  const { domain, height } = useCandlestickChart();
+  const [min, max] = domain || [0, 1];
+  
+  const getY = (price: number) => {
+    if (!max || !min || max === min) return -1000;
+    // Wagmi charts domain maps linearly to height. Top is 0, bottom is height.
+    return height - ((price - min) / (max - min)) * height;
+  };
+
+  const entryY = getY(entryPrice);
+  const tpY = getY(tpPrice);
+  const slY = getY(slPrice);
+
+  const renderLine = (y: number, label: string, color: string) => {
+    // Only render if within the chart height (or slightly outside)
+    if (y < -20 || y > height + 20) return null;
+    return (
+      <View style={{ position: 'absolute', top: y - 10, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', height: 20 }}>
+        <View style={{ flex: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: color }} />
+        <Text style={{ fontSize: 10, fontWeight: 'bold', color: color, marginLeft: 4 }}>{label}</Text>
+      </View>
+    );
+  };
+
   return (
-    <View style={[priceLineStyles.container]}>
-      <View style={[priceLineStyles.line, { borderColor: color }]} />
-      <Text style={[priceLineStyles.label, { color }]}>{label}</Text>
-    </View>
+    <>
+      {entryPrice > 0 && renderLine(entryY, `Entry ${entryPrice}`, '#34d8ff')}
+      {tpPrice > 0 && renderLine(tpY, `TP ${tpPrice}`, '#4ade80')}
+      {slPrice > 0 && renderLine(slY, `SL ${slPrice}`, '#f87171')}
+    </>
   );
 }
 
-const priceLineStyles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  line: {
-    flex: 1,
-    borderTopWidth: 1,
-    borderStyle: 'dashed',
-  },
-  label: {
-    fontSize: 10,
-    marginLeft: 4,
-    fontWeight: 'bold',
-  },
+// Memoized wrapper to prevent the chart from jumping/remounting on every polling update
+const MemoizedChart = React.memo(({ data, entryPrice, tpPrice, slPrice }: { data: any[], entryPrice: number, tpPrice: number, slPrice: number }) => {
+  return (
+    <CandlestickChart.Provider data={data}>
+      <View style={{ position: 'relative' }}>
+        <CandlestickChart>
+          <CandlestickChart.Candles />
+          <CandlestickChart.Crosshair />
+        </CandlestickChart>
+        <ChartPriceLines entryPrice={entryPrice} tpPrice={tpPrice} slPrice={slPrice} />
+      </View>
+      <CandlestickChart.DatetimeText style={styles.chartLabel} />
+      <CandlestickChart.PriceText type="open" style={styles.chartLabel} />
+    </CandlestickChart.Provider>
+  );
+}, (prev, next) => {
+  // Only re-render if data reference changes or key price levels change
+  return prev.data === next.data && 
+         prev.entryPrice === next.entryPrice && 
+         prev.tpPrice === next.tpPrice && 
+         prev.slPrice === next.slPrice;
 });
 
 export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible, onClose, position }) => {
@@ -46,7 +76,7 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (visible && position) {
+    if (visible && position?.symbol) {
       setLoading(true);
       fetchChartData(position.symbol).then((ohlcv) => {
         // format data for wagmi-charts: { timestamp: number, open: number, high: number, low: number, close: number }
@@ -61,7 +91,7 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
         setLoading(false);
       });
     }
-  }, [visible, position]);
+  }, [visible, position?.symbol]);
 
   if (!position) return null;
 
@@ -116,25 +146,7 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
             {loading ? (
               <ActivityIndicator size="large" color="#fff" />
             ) : data.length > 0 ? (
-              <CandlestickChart.Provider data={data}>
-                <View style={{ position: 'relative' }}>
-                  <CandlestickChart>
-                    <CandlestickChart.Candles />
-                    <CandlestickChart.Crosshair />
-                  </CandlestickChart>
-
-                {/* Price lines overlay */}
-                <PriceLine label={`Entry ${position.entryPrice}`} color="#34d8ff" />
-                {tpPrice > 0 && (
-                  <PriceLine label={`TP ${tpPrice}`} color="#4ade80" />
-                )}
-                {slPrice > 0 && (
-                  <PriceLine label={`SL ${slPrice}`} color="#f87171" />
-                )}
-                </View>
-                <CandlestickChart.DatetimeText style={styles.chartLabel} />
-                <CandlestickChart.PriceText type="open" style={styles.chartLabel} />
-              </CandlestickChart.Provider>
+              <MemoizedChart data={data} entryPrice={position.entryPrice} tpPrice={tpPrice} slPrice={slPrice} />
             ) : (
               <Text style={{ color: '#666', textAlign: 'center' }}>No chart data available</Text>
             )}

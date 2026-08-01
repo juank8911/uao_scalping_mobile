@@ -287,7 +287,11 @@ export default function DashboardScreen() {
           setChartModalVisible(false);
           setSelectedPosition(null);
         }}
-        position={selectedPosition}
+        position={
+          selectedPosition 
+            ? status?.open_positions?.find(p => p.symbol === selectedPosition.symbol) || selectedPosition 
+            : null
+        }
       />
 
       <NeoModal
