@@ -12,7 +12,7 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "jeikei-design-system": "file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz",
-    "lightweight-charts": "^5.2.0",
+    "lightweight-charts": "^4.2.3",
     "lucide-react": "^1.28.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

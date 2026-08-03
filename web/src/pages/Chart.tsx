@@ -86,6 +86,11 @@ export default function ChartScreen() {
         borderVisible: false,
         wickUpColor: '#4ade80',
         wickDownColor: '#f87171',
+        priceFormat: {
+          type: 'price',
+          precision: 5,
+          minMove: 0.00001,
+        },
       });
 
       candlestickSeriesRef.current = candlestickSeries;
@@ -140,8 +145,6 @@ export default function ChartScreen() {
         if (data && data.length > 0) {
             series.setData(data);
         }
-        
-        chartRef.current?.timeScale().fitContent();
 
         if (trades && trades.length > 0) {
             const markers = trades.map((t: any) => ({

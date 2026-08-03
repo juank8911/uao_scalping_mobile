@@ -1,6 +1,6 @@
 import { getToken, deleteToken, saveToken } from '../utils/auth';
 
-const API_BASE_URL = 'http://192.168.0.9:8000/api/v1';
+const API_BASE_URL = '/api/v1';
 const BASE_URL = `${API_BASE_URL}/control`;
 
 export interface AttachedOrderInfo {
@@ -249,7 +249,7 @@ export const getConfig = async (): Promise<ConfigResponse> => {
 
 export const getCredentials = async (): Promise<CredentialResponse[]> => {
   try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/credentials`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/credentials/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -281,7 +281,7 @@ export const saveCredentials = async (
     is_active: true
   };
   
-  const response = await fetchWithAuth(`${API_BASE_URL}/credentials`, {
+  const response = await fetchWithAuth(`${API_BASE_URL}/credentials/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
