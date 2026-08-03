@@ -9,6 +9,7 @@ export default function ChartScreen() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [exchangeId, setExchangeId] = useState<string>('BINANCE');
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<string>('5m');
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [history, setHistory] = useState<any[]>([]);
@@ -113,7 +114,7 @@ export default function ChartScreen() {
     
     const updateChart = async () => {
       try {
-        const data = await fetchChartData(selectedSymbol);
+        const data = await fetchChartData(selectedSymbol, timeframe);
         const trades = await fetchChartTrades(selectedSymbol);
         const historyData = await fetchChartHistory(selectedSymbol);
         
@@ -192,7 +193,7 @@ export default function ChartScreen() {
     };
 
     updateChart();
-  }, [selectedSymbol, status]);
+  }, [selectedSymbol, status, timeframe]);
 
   const activePosition: PositionInfo | undefined = status?.open_positions?.find(
     (p) => p.symbol === selectedSymbol
@@ -204,12 +205,26 @@ export default function ChartScreen() {
       <div className="flex flex-col flex-1 pt-16 h-full pb-24 max-w-5xl mx-auto w-full">
         <div className="flex flex-row justify-between items-center px-6 mb-4">
           <h1 className="text-white text-2xl font-bold">Gráfico</h1>
-          <button 
-            className="bg-[#34d8ff]/10 px-4 py-2 rounded-lg border border-[#34d8ff]/20 text-[#34d8ff] font-bold text-xs tracking-wide"
-            onClick={() => setDropdownVisible(true)}
-          >
-            {selectedSymbol || 'Cargando...'}
-          </button>
+          <div className="flex flex-row gap-3">
+            <select
+              value={timeframe}
+              onChange={(e) => setTimeframe(e.target.value)}
+              className="bg-[#34d8ff]/10 px-3 py-2 rounded-lg border border-[#34d8ff]/20 text-[#34d8ff] font-bold text-xs outline-none appearance-none"
+            >
+              <option value="1m" className="bg-black text-[#34d8ff]">1m</option>
+              <option value="5m" className="bg-black text-[#34d8ff]">5m</option>
+              <option value="15m" className="bg-black text-[#34d8ff]">15m</option>
+              <option value="1h" className="bg-black text-[#34d8ff]">1h</option>
+              <option value="4h" className="bg-black text-[#34d8ff]">4h</option>
+              <option value="1d" className="bg-black text-[#34d8ff]">1d</option>
+            </select>
+            <button 
+              className="bg-[#34d8ff]/10 px-4 py-2 rounded-lg border border-[#34d8ff]/20 text-[#34d8ff] font-bold text-xs tracking-wide"
+              onClick={() => setDropdownVisible(true)}
+            >
+              {selectedSymbol || 'Cargando...'}
+            </button>
+          </div>
         </div>
 
         {isLoading ? (

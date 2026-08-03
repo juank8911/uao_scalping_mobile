@@ -1,12 +1,13 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, Outlet, useLocation } from 'react-router-dom';
-import { Activity, LayoutDashboard, Settings } from 'lucide-react';
+import { Activity, LayoutDashboard, Settings, MessageSquare } from 'lucide-react';
 import { AuthModal } from './components/AuthModal';
 
 import LoginScreen from './pages/Login';
 import DashboardScreen from './pages/Dashboard';
 import ControlPanelScreen from './pages/ControlPanel';
 import ChartScreen from './pages/Chart';
+import TelegramConfigScreen from './pages/TelegramConfig';
 import { getToken } from './utils/auth';
 
 const PrivateRoute = () => {
@@ -39,6 +40,7 @@ const BottomNavigation = () => {
   const navItems = [
     { path: '/', icon: <LayoutDashboard size={24} />, label: 'Dashboard' },
     { path: '/chart', icon: <Activity size={24} />, label: 'Chart' },
+    { path: '/telegram', icon: <MessageSquare size={24} />, label: 'Telegram' },
     { path: '/control', icon: <Settings size={24} />, label: 'Config' },
   ];
 
@@ -79,6 +81,7 @@ function App() {
         <Route element={<PrivateRoute />}>
           <Route path="/" element={<DashboardScreen />} />
           <Route path="/chart" element={<ChartScreen />} />
+          <Route path="/telegram" element={<TelegramConfigScreen />} />
           <Route path="/control" element={<ControlPanelScreen />} />
         </Route>
         

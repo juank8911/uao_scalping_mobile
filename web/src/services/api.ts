@@ -154,9 +154,9 @@ export const stopEngine = async (): Promise<any> => {
   }
 };
 
-export const fetchChartData = async (symbol: string) => {
+export const fetchChartData = async (symbol: string, timeframe: string = '5m') => {
   try {
-    const response = await fetchWithAuth(`${BASE_URL}/chart/ohlcv?symbol=${encodeURIComponent(symbol)}&timeframe=5m`, {
+    const response = await fetchWithAuth(`${BASE_URL}/chart/ohlcv?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}`, {
       method: 'GET',
     });
     const data = await response.json();
