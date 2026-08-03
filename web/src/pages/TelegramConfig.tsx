@@ -30,6 +30,8 @@ interface Group {
   is_group: boolean;
   is_channel: boolean;
   is_monitored: boolean;
+  expected_structure?: string;
+  use_all?: boolean;
 }
 
 export default function TelegramConfigScreen() {
@@ -138,13 +140,26 @@ export default function TelegramConfigScreen() {
     });
   };
 
+  const handleUpdateGroupAttr = (id: string, attr: 'expected_structure' | 'use_all', value: any) => {
+    setGroups(prev => prev.map(g => g.id === id ? { ...g, [attr]: value } : g));
+  };
+
   const handleSaveGroups = async () => {
     setLoading(true);
     setMessage(null);
     try {
+      const payloadGroups = Array.from(selectedGroups).map(id => {
+        const g = groups.find(x => x.id === id);
+        return {
+          group_id: id,
+          expected_structure: g?.expected_structure || null,
+          use_all: g?.use_all || false,
+        };
+      });
+
       await apiFetch('/groups/monitor', {
         method: 'POST',
-        body: JSON.stringify({ group_ids: Array.from(selectedGroups) }),
+        body: JSON.stringify({ groups: payloadGroups }),
       });
       setMessage({ text: `✅ ${selectedGroups.size} grupos siendo monitoreados`, type: 'success' });
     } catch (e: any) {
@@ -302,24 +317,54 @@ export default function TelegramConfigScreen() {
               ) : (
                 <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
                   {groups.map(g => (
-                    <button
-                      key={g.id}
-                      onClick={() => handleToggleGroup(g.id)}
-                      className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                    <div key={g.id} className="flex flex-col gap-1">
+                      <div className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
                         selectedGroups.has(g.id)
                           ? 'bg-[#34d8ff]/10 border-[#34d8ff]/40 text-[#34d8ff]'
                           : 'bg-white/3 border-white/10 text-white/70 hover:bg-white/6'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-2 h-2 rounded-full ${selectedGroups.has(g.id) ? 'bg-[#34d8ff]' : 'bg-white/20'}`} />
-                        <span className="text-sm font-medium text-left">{g.title}</span>
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleToggleGroup(g.id)}
+                            className={`w-4 h-4 rounded flex items-center justify-center border ${selectedGroups.has(g.id) ? 'bg-[#34d8ff] border-[#34d8ff]' : 'border-white/30 bg-transparent'}`}
+                          >
+                            {selectedGroups.has(g.id) && <CheckCircle size={12} className="text-black" />}
+                          </button>
+                          <span className="text-sm font-medium text-left">{g.title}</span>
+                        </div>
+                        <NeoBadge
+                          label={g.is_channel ? 'Canal' : 'Grupo'}
+                          variant={g.is_channel ? 'info' : 'success'}
+                        />
                       </div>
-                      <NeoBadge
-                        label={g.is_channel ? 'Canal' : 'Grupo'}
-                        variant={g.is_channel ? 'info' : 'success'}
-                      />
-                    </button>
+                      
+                      {selectedGroups.has(g.id) && (
+                        <div className="mt-2 pl-8 pr-2 pb-2 flex flex-col gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={g.use_all || false}
+                              onChange={(e) => handleUpdateGroupAttr(g.id, 'use_all', e.target.checked)}
+                              className="w-4 h-4 rounded bg-white/10 border-white/20 text-[#34d8ff] focus:ring-[#34d8ff]"
+                            />
+                            <span className="text-white/70 text-xs font-medium">Procesar todos los mensajes (ignorar estructura)</span>
+                          </label>
+                          
+                          {!g.use_all && (
+                            <div>
+                              <label className="text-white/60 text-xs font-bold tracking-widest mb-1 block">Estructura esperada</label>
+                              <textarea
+                                value={g.expected_structure || ''}
+                                onChange={(e) => handleUpdateGroupAttr(g.id, 'expected_structure', e.target.value)}
+                                placeholder="Ej: BUY BTC\nTP: 60000\nSL: 55000"
+                                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white text-xs outline-none focus:border-[#34d8ff]/50 min-h-[60px]"
+                                rows={2}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
