@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
-import { NeoModal } from '../components/NeoModal';
-import { getStatus, SystemStatus, startEngine, stopEngine, PositionInfo } from '../services/api';
+import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
+import { getStatus, startEngine, stopEngine } from '../services/api';
+import type { SystemStatus, PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 import { PositionChartModal } from '../components/PositionChartModal';
 
@@ -293,9 +293,14 @@ export default function DashboardScreen() {
       />
 
       <NeoModal
-        visible={isDropdownVisible}
+        open={isDropdownVisible}
         title="Seleccionar Símbolo"
         onClose={() => setDropdownVisible(false)}
+        footer={
+          <NeoButton variant="outline" size="md" onClick={() => setDropdownVisible(false)}>
+            Cerrar
+          </NeoButton>
+        }
       >
         {status?.active_symbols && status.active_symbols.length > 0 ? (
           <div className="flex flex-col">
@@ -319,10 +324,6 @@ export default function DashboardScreen() {
         ) : (
           <p className="text-white/70 text-xs mt-2">Ningún símbolo activo disponible.</p>
         )}
-        <div className="h-4" />
-        <NeoButton variant="outline" size="md" onClick={() => setDropdownVisible(false)}>
-          Cerrar
-        </NeoButton>
       </NeoModal>
     </NeoLayout>
   );

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
-import { NeoModal } from '../components/NeoModal';
-import { getStatus, SystemStatus, PositionInfo, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory } from '../services/api';
-import { createChart, ColorType, CrosshairMode, IChartApi, ISeriesApi } from 'lightweight-charts';
+import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
+import { getStatus, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory } from '../services/api';
+import type { SystemStatus, PositionInfo } from '../services/api';
+import { createChart, ColorType, CrosshairMode } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 
 export default function ChartScreen() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
@@ -310,9 +311,14 @@ export default function ChartScreen() {
       </div>
 
       <NeoModal
-        visible={isDropdownVisible}
+        open={isDropdownVisible}
         title="Seleccionar Símbolo"
         onClose={() => setDropdownVisible(false)}
+        footer={
+          <NeoButton variant="outline" size="md" onClick={() => setDropdownVisible(false)}>
+            Cerrar
+          </NeoButton>
+        }
       >
         {status?.active_symbols && status.active_symbols.length > 0 ? (
           <div className="flex flex-col">
@@ -336,10 +342,6 @@ export default function ChartScreen() {
         ) : (
            <p className="text-white/70 text-xs mt-2 text-center">Ningún símbolo activo disponible.</p>
         )}
-        <div className="h-4" />
-        <NeoButton variant="outline" size="md" onClick={() => setDropdownVisible(false)}>
-          Cerrar
-        </NeoButton>
       </NeoModal>
     </NeoLayout>
   );

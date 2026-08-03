@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { NeoCard, NeoButton } from 'jeikei-design-system';
-import { NeoModal } from './NeoModal';
-import { PositionInfo, fetchChartData } from '../services/api';
+import { NeoCard, NeoButton, NeoModal } from 'jeikei-design-system';
+import { fetchChartData } from '../services/api';
+import type { PositionInfo } from '../services/api';
 
 interface PositionChartModalProps {
   visible: boolean;
@@ -10,7 +10,7 @@ interface PositionChartModalProps {
 }
 
 export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible, onClose, position }) => {
-  const [data, setData] = useState<any[]>([]);
+  const [_data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -33,66 +33,61 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
   if (position.orders && position.orders.length > 0) {
     const tpOrder = position.orders.find(o => o.type === 'TAKE_PROFIT');
     const slOrder = position.orders.find(o => o.type === 'STOP_LOSS');
-    if (tpOrder) {
-      tpPrice = tpOrder.price;
-      tpDist = tpOrder.distance_pct;
-    }
-    if (slOrder) {
-      slPrice = slOrder.price;
-      slDist = slOrder.distance_pct;
-    }
+    if (tpOrder) { tpPrice = tpOrder.price; tpDist = tpOrder.distance_pct; }
+    if (slOrder) { slPrice = slOrder.price; slDist = slOrder.distance_pct; }
   }
 
   const isLong = position.side.toLowerCase() === 'long';
 
   return (
-    <NeoModal visible={visible} onClose={onClose} title={`${position.symbol} (5m)`} fullHeight>
-      <div className="flex flex-col h-full min-h-[450px]">
-        <NeoCard 
-          title="Current Position" 
-          value={isLong ? 'LONG' : 'SHORT'} 
+    <NeoModal 
+      open={visible} 
+      onClose={onClose} 
+      title={`${position.symbol} (5m)`}
+      footer={
+        <NeoButton variant="primary" size="md" onClick={onClose}>
+          Cerrar
+        </NeoButton>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 450 }}>
+        <NeoCard
+          title="Current Position"
+          value={isLong ? 'LONG' : 'SHORT'}
           trend={{ value: `${position.unrealizedPnl.toFixed(2)} USDT`, direction: position.unrealizedPnl >= 0 ? 'up' : 'down' }}
         >
-          <div className="flex justify-between mt-3">
-            <div className="flex-1">
-              <p className="text-white/60 text-xs mb-1">Entry Price</p>
-              <p className="text-white text-sm font-bold">{position.entryPrice}</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 4px' }}>Entry Price</p>
+              <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0 }}>{position.entryPrice}</p>
             </div>
-            <div className="flex-1">
-              <p className="text-white/60 text-xs mb-1">Mark Price</p>
-              <p className="text-white text-sm font-bold">{position.markPrice}</p>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 4px' }}>Mark Price</p>
+              <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0 }}>{position.markPrice}</p>
             </div>
           </div>
-          <div className="flex justify-between mt-3">
-            <div className="flex-1">
-              <p className="text-white/60 text-xs mb-1">Take Profit</p>
-              <p className="text-[#4ade80] text-sm font-bold">{tpPrice ? tpPrice : 'N/A'} ({tpDist.toFixed(2)}%)</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 4px' }}>Take Profit</p>
+              <p style={{ color: '#4ade80', fontSize: 13, fontWeight: 700, margin: 0 }}>{tpPrice ? tpPrice : 'N/A'} ({tpDist.toFixed(2)}%)</p>
             </div>
-            <div className="flex-1">
-              <p className="text-white/60 text-xs mb-1">Stop Loss</p>
-              <p className="text-[#f87171] text-sm font-bold">{slPrice ? slPrice : 'N/A'} ({slDist.toFixed(2)}%)</p>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 4px' }}>Stop Loss</p>
+              <p style={{ color: '#f87171', fontSize: 13, fontWeight: 700, margin: 0 }}>{slPrice ? slPrice : 'N/A'} ({slDist.toFixed(2)}%)</p>
             </div>
           </div>
         </NeoCard>
 
-        <div className="flex-1 flex flex-col justify-center items-center my-5 min-h-[250px] border border-white/10 rounded-xl bg-white/5 relative">
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', margin: '20px 0', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, background: 'rgba(255,255,255,0.03)', minHeight: 200 }}>
           {loading ? (
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-          ) : data.length > 0 ? (
-            <div className="text-white/60 text-center">
-              <p className="mb-2">Gráfico de Velas (Mock)</p>
-              <p className="text-xs">Se requiere integrar lightweight-charts u otra librería de web.</p>
-              <p className="text-xs mt-2 text-[#34d8ff]">Entry: {position.entryPrice}</p>
-            </div>
+            <div style={{ width: 32, height: 32, border: '2px solid rgba(255,255,255,0.1)', borderTop: '2px solid #fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
           ) : (
-            <p className="text-[#666] text-center">No chart data available</p>
+            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)' }}>
+              <p style={{ marginBottom: 8 }}>Gráfico disponible en Chart</p>
+              <p style={{ color: '#34d8ff', fontSize: 13 }}>Entry: {position.entryPrice}</p>
+            </div>
           )}
         </div>
-        
-        <div className="h-4" />
-        <NeoButton variant="primary" size="md" onClick={onClose}>
-          Cerrar Gráfico
-        </NeoButton>
       </div>
     </NeoModal>
   );

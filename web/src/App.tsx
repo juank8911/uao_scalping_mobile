@@ -43,7 +43,7 @@ const BottomNavigation = () => {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-[#02040a] border-t border-[#34d8ff]/10 p-2 pb-safe">
+    <div className="fixed bottom-0 left-0 right-0 jk-glass border-t border-[var(--neo-glow)] p-2 pb-safe z-50">
       <div className="flex justify-around items-center max-w-md mx-auto">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
@@ -51,12 +51,16 @@ const BottomNavigation = () => {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`flex flex-col items-center p-2 transition-colors ${
-                isActive ? 'text-[#34d8ff]' : 'text-white/40 hover:text-white/70'
+              className={`flex flex-col items-center p-2 transition-all duration-300 rounded-lg ${
+                isActive 
+                  ? 'text-[var(--neo-accent)] bg-[var(--neo-accent)]/10 shadow-[0_0_15px_rgba(52,216,255,0.15)] border border-[var(--neo-accent)]/30' 
+                  : 'text-white/40 hover:text-white/70 border border-transparent'
               }`}
             >
-              {item.icon}
-              <span className="text-[10px] mt-1 font-bold">{item.label}</span>
+              <div className={`${isActive ? 'drop-shadow-[0_0_8px_var(--neo-accent)]' : ''}`}>
+                {item.icon}
+              </div>
+              <span className="jk-hud-heading text-[10px] mt-1 font-bold tracking-widest">{item.label}</span>
             </button>
           );
         })}

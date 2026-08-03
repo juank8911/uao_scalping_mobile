@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { NeoLayout, NeoCard, NeoInput, NeoButton, NeoBadge } from 'jeikei-design-system';
-import { NeoModal } from '../components/NeoModal';
-import { startEngine, stopEngine, updateConfig, getConfig, getCredentials, saveCredentials, CredentialResponse } from '../services/api';
+import { NeoLayout, NeoCard, NeoInput, NeoButton, NeoBadge, NeoModal } from 'jeikei-design-system';
+import { startEngine, stopEngine, updateConfig, getConfig, getCredentials, saveCredentials } from '../services/api';
+import type { CredentialResponse } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 
 export default function ControlPanelScreen() {
@@ -276,9 +276,14 @@ export default function ControlPanelScreen() {
         )}
 
         <NeoModal 
-          visible={isExchangeModalVisible} 
+          open={isExchangeModalVisible} 
           title="Select Exchange" 
           onClose={() => setIsExchangeModalVisible(false)}
+          footer={
+            <NeoButton variant="outline" size="md" onClick={() => setIsExchangeModalVisible(false)}>
+              Cancel
+            </NeoButton>
+          }
         >
           <div className="flex flex-col">
             {EXCHANGES.map((item) => (
@@ -298,10 +303,6 @@ export default function ControlPanelScreen() {
               </button>
             ))}
           </div>
-          <div className="h-4" />
-          <NeoButton variant="outline" size="md" onClick={() => setIsExchangeModalVisible(false)}>
-            Cancel
-          </NeoButton>
         </NeoModal>
       </div>
     </NeoLayout>

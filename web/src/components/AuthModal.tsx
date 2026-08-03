@@ -16,14 +16,11 @@ export const AuthModal = () => {
       setVisible(true);
       setPassword('');
     };
-
     window.addEventListener('require-auth-modal', handleRequireAuth);
     return () => window.removeEventListener('require-auth-modal', handleRequireAuth);
   }, []);
 
   const handleConfirm = () => {
-    // In a real scenario, you'd validate the password against the backend or a local hash.
-    // For this migration, we assume any non-empty password passes the "biometric/PIN" check.
     if (password.length > 0) {
       if (resolvePromise) resolvePromise(true);
       setVisible(false);
@@ -37,18 +34,18 @@ export const AuthModal = () => {
 
   return (
     <NeoModal visible={visible} title="Autorización Requerida" onClose={handleCancel}>
-      <div className="flex flex-col gap-4">
-        <p className="text-white/80 text-sm text-center">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14, textAlign: 'center', margin: 0 }}>
           {promptMessage}
         </p>
         <NeoInput
           type="password"
           placeholder="Ingresa tu contraseña / PIN"
           value={password}
-          onChange={(e: any) => setPassword(e.target.value)}
-          autoFocus
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') handleConfirm(); }}
         />
-        <div className="flex justify-end gap-3 mt-4">
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
           <NeoButton variant="outline" onClick={handleCancel}>
             Cancelar
           </NeoButton>

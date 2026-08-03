@@ -1,32 +1,25 @@
-# React + TypeScript + Vite
+# UAO Scalping Mobile - Web App
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Panel de control web para administrar el motor de UAO Scalping.
 
-Currently, two official plugins are available:
+## 🚀 Cómo abrir y ejecutar la app web
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Esta aplicación web está construida con React y Vite. Para ejecutarla localmente, sigue estos pasos:
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### 1. Instalar dependencias
+Abre una terminal en esta carpeta (`web`) y ejecuta:
+```bash
+npm install
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 2. Iniciar el servidor de desarrollo
+Una vez instaladas las dependencias, inicia la aplicación con:
+```bash
+npm run dev
+```
+
+### 3. Abrir en el navegador
+Vite te proporcionará una URL local (generalmente `http://localhost:5173`). Haz clic en ella o cópiala y pégala en tu navegador.
+
+## 🎨 Diseño (JeiKei Design System)
+La aplicación utiliza el sistema de diseño JeiKei (Living Interface) para un aspecto *glassmorphism* y neón interactivo, alineado 100% con la versión móvil.
