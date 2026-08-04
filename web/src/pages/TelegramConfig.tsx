@@ -34,7 +34,19 @@ interface Group {
   use_all?: boolean;
 }
 
+type ViewTab = 'settings' | 'messages';
+
+interface TelegramMessage {
+  id: string;
+  chat_id: string;
+  chat_title: string;
+  sender: string;
+  text: string;
+  date: string;
+}
+
 export default function TelegramConfigScreen() {
+  const [activeTab, setActiveTab] = useState<ViewTab>('settings');
   // Step state
   const [step, setStep] = useState<Step>('config');
 
@@ -58,6 +70,10 @@ export default function TelegramConfigScreen() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  // Messages
+  const [messages, setMessages] = useState<TelegramMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
   // Load current config on mount
   useEffect(() => {
     apiFetch('/config').then((data) => {
@@ -73,6 +89,24 @@ export default function TelegramConfigScreen() {
       }
     }).catch(() => {});
   }, []);
+
+  const loadMessages = async () => {
+    setLoadingMessages(true);
+    try {
+      const data = await apiFetch('/messages');
+      setMessages(data);
+    } catch (e: any) {
+      console.error(e);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'messages' && isConnected) {
+      loadMessages();
+    }
+  }, [activeTab, isConnected]);
 
   const loadGroups = async () => {
     try {
@@ -188,6 +222,24 @@ export default function TelegramConfigScreen() {
           </div>
         </div>
 
+        {/* Tabs Selector */}
+        <div className="flex border-b border-white/10 mb-6">
+          <button 
+            className={`px-4 py-2 font-bold text-sm border-b-2 transition-colors ${activeTab === 'settings' ? 'border-[#34d8ff] text-[#34d8ff]' : 'border-transparent text-white/50 hover:text-white'}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            Configuración
+          </button>
+          <button 
+            className={`px-4 py-2 font-bold text-sm border-b-2 transition-colors ${activeTab === 'messages' ? 'border-[#34d8ff] text-[#34d8ff]' : 'border-transparent text-white/50 hover:text-white'}`}
+            onClick={() => setActiveTab('messages')}
+          >
+            Mensajes Recientes
+          </button>
+        </div>
+
+        {activeTab === 'settings' ? (
+          <>
         {/* Step Indicator */}
         <div className="flex gap-2 mb-6">
           {(['config', 'verify', 'groups'] as Step[]).map((s, i) => (
@@ -377,6 +429,44 @@ export default function TelegramConfigScreen() {
                   {loading ? 'Guardando...' : <><Send size={14} className="inline mr-1.5" />Activar Monitoreo</>}
                 </NeoButton>
               </div>
+            </div>
+          </NeoCard>
+        )}
+          </>
+        ) : (
+          <NeoCard title="Últimos Mensajes" value="">
+            <div className="mt-4 flex flex-col gap-4">
+              <div className="flex justify-between items-center">
+                <p className="text-white/50 text-sm">Mensajes recibidos de tus grupos monitoreados.</p>
+                <button onClick={loadMessages} className="text-[#34d8ff] text-xs flex items-center gap-1" disabled={loadingMessages}>
+                  <RefreshCw size={12} className={loadingMessages ? "animate-spin" : ""} /> Actualizar
+                </button>
+              </div>
+              
+              {!isConnected ? (
+                <p className="text-white/40 text-sm py-4 text-center">Debes configurar y conectar Telegram primero.</p>
+              ) : messages.length === 0 ? (
+                <p className="text-white/40 text-sm py-4 text-center">No hay mensajes recientes.</p>
+              ) : (
+                <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2">
+                  {messages.map(msg => (
+                    <div key={msg.id} className="bg-white/5 border border-white/10 rounded-lg p-3">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[#34d8ff] font-bold text-sm">{msg.chat_title}</span>
+                          <span className="text-white/40 text-xs">por {msg.sender}</span>
+                        </div>
+                        <span className="text-white/40 text-xs">
+                          {new Date(msg.date).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="text-white/80 text-sm whitespace-pre-wrap font-mono bg-black/20 p-2 rounded">
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </NeoCard>
         )}

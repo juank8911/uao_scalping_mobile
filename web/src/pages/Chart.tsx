@@ -1,17 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
-import { getStatus, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory } from '../services/api';
+import { getStatus, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory, closePosition } from '../services/api';
 import type { SystemStatus, PositionInfo } from '../services/api';
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 
 export default function ChartScreen() {
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const initialSymbol = queryParams.get('symbol');
+
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [exchangeId, setExchangeId] = useState<string>('BINANCE');
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(initialSymbol);
   const [timeframe, setTimeframe] = useState<string>('5m');
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [closingPos, setClosingPos] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
   
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -132,6 +138,20 @@ export default function ChartScreen() {
                 side: currentPosition?.side === 'long' ? 'SELL' : 'BUY' 
             }))
         ];
+
+        if (currentPosition && currentPosition.entryPrice) {
+            const side = currentPosition.side.toLowerCase();
+            const assumedFee = 0.0010; // 0.1% round-trip conservative estimate
+            const bePrice = side === 'buy' || side === 'long' 
+                ? currentPosition.entryPrice * (1 + assumedFee) 
+                : currentPosition.entryPrice * (1 - assumedFee);
+            
+            chartOrders.push({
+                price: bePrice,
+                type: 'BREAK-EVEN',
+                side: side === 'buy' || side === 'long' ? 'SELL' : 'BUY'
+            });
+        }
         
         const series = candlestickSeriesRef.current;
         if (!series) return;
@@ -175,6 +195,7 @@ export default function ChartScreen() {
                 let lineColor = ord.side === 'BUY' ? '#4ade80' : '#f87171';
                 if (ord.type === 'TAKE_PROFIT') lineColor = '#4ade80';
                 if (ord.type === 'STOP_LOSS') lineColor = '#f87171';
+                if (ord.type === 'BREAK-EVEN') lineColor = '#fbbf24'; // amber-400
 
                 const line = series.createPriceLine({
                     price: ord.price,
@@ -198,6 +219,34 @@ export default function ChartScreen() {
   const activePosition: PositionInfo | undefined = status?.open_positions?.find(
     (p) => p.symbol === selectedSymbol
   );
+
+  let bePriceForPnl = 0;
+  if (activePosition && activePosition.entryPrice) {
+      const side = activePosition.side.toLowerCase();
+      const assumedFee = 0.0010;
+      bePriceForPnl = side === 'buy' || side === 'long' 
+          ? activePosition.entryPrice * (1 + assumedFee) 
+          : activePosition.entryPrice * (1 - assumedFee);
+  }
+
+  const livePnl = activePosition && activePosition.unrealizedPnl !== undefined 
+    ? activePosition.unrealizedPnl 
+    : 0;
+
+  const handleClosePosition = async () => {
+    if (!activePosition) return;
+    setClosingPos(true);
+    try {
+      await closePosition(activePosition.symbol);
+      const data = await getStatus();
+      setStatus(data);
+    } catch (e) {
+      console.error(e);
+      alert('Error cerrando la posición.');
+    } finally {
+      setClosingPos(false);
+    }
+  };
   const standaloneOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
 
   return (
@@ -243,18 +292,35 @@ export default function ChartScreen() {
                 <NeoCard
                   title="Estado de Operación"
                   value={activePosition ? 'POSICIÓN ABIERTA' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'ESPERANDO SEÑAL')}
-                  trend={activePosition ? {
-                    value: `${activePosition.unrealizedPnl >= 0 ? '+' : ''}${activePosition.unrealizedPnl.toFixed(2)} USDT`,
-                    direction: activePosition.unrealizedPnl >= 0 ? 'up' : 'down'
-                  } : undefined}
                 >
                   {activePosition ? (
-                    <div className="mt-3 bg-black/20 p-3 rounded-lg">
-                      <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Lado:</span> {activePosition.side.toUpperCase()}</p>
+                    <div className="mt-3 bg-black/20 p-3 rounded-lg relative">
+                      <div className="absolute top-3 right-3 flex gap-2">
+                        <NeoButton 
+                          variant="danger" 
+                          size="small" 
+                          onClick={handleClosePosition} 
+                          disabled={closingPos}
+                        >
+                          {closingPos ? 'Cerrando...' : 'Cerrar'}
+                        </NeoButton>
+                      </div>
+                      <p className="text-white/90 text-sm mb-1.5">
+                        <span className="font-bold text-[#34d8ff]">PNL:</span>{' '}
+                        <span className={`font-bold text-lg ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                          {livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT
+                        </span>
+                      </p>
+                      <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Lado:</span> {activePosition.side.toLowerCase() === 'buy' ? 'LONG' : 'SHORT'}</p>
                       <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Entrada:</span> {activePosition.entryPrice}</p>
                       <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Actual:</span> {activePosition.markPrice}</p>
                       <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Apalancamiento:</span> {activePosition.leverage}x</p>
                       <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Contratos:</span> {activePosition.contracts}</p>
+                      {activePosition.confidence !== undefined && (
+                        <p className="text-white/90 text-sm mb-1.5">
+                          <span className="font-bold text-[#34d8ff]">Confianza IA:</span> {(activePosition.confidence * 100).toFixed(1)}%
+                        </p>
+                      )}
   
                       {activePosition.orders && activePosition.orders.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-[#34d8ff]/10">

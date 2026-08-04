@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
-import { getStatus, startEngine, stopEngine } from '../services/api';
+import { getStatus, startEngine, stopEngine, closePosition } from '../services/api';
 import type { SystemStatus, PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 import { PositionChartModal } from '../components/PositionChartModal';
 
 export default function DashboardScreen() {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [closingSymbol, setClosingSymbol] = useState<string | null>(null);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isConnected, setIsConnected] = useState<boolean>(true);
   const [chartModalVisible, setChartModalVisible] = useState(false);
@@ -101,26 +104,26 @@ export default function DashboardScreen() {
           )}
         </div>
 
-        <NeoCard
-          title="Global Balance"
-          value={status && status.global_balance !== undefined ? `$${status.global_balance.toFixed(2)}` : '...'}
-          trend={{ value: 'USDT', direction: 'up' }}
-        >
-          <p className="text-white/70 text-xs mt-2">Balance total disponible según el modo actual ({status?.execution_mode || '...'}).</p>
-        </NeoCard>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <NeoCard
+            title="Global Balance"
+            value={status && status.global_balance !== undefined ? `$${status.global_balance.toFixed(2)}` : '...'}
+            trend={{ value: 'USDT', direction: 'up' }}
+          >
+            <p className="text-white/70 text-xs mt-2">Balance total disponible según el modo actual ({status?.execution_mode || '...'}).</p>
+          </NeoCard>
 
-        <div className="h-6" />
-
-        <NeoCard
-          title="Daily PnL"
-          value={status ? `$${status.daily_pnl.toFixed(2)}` : '...'}
-          trend={{
-            value: status && status.daily_pnl >= 0 ? 'PROFIT' : 'LOSS',
-            direction: status && status.daily_pnl >= 0 ? 'up' : 'down'
-          }}
-        >
-          <p className="text-white/70 text-xs mt-2">Rendimiento acumulado de hoy.</p>
-        </NeoCard>
+          <NeoCard
+            title="Daily PnL"
+            value={status ? `$${status.daily_pnl.toFixed(2)}` : '...'}
+            trend={{
+              value: status && status.daily_pnl >= 0 ? 'PROFIT' : 'LOSS',
+              direction: status && status.daily_pnl >= 0 ? 'up' : 'down'
+            }}
+          >
+            <p className="text-white/70 text-xs mt-2">Rendimiento acumulado de hoy.</p>
+          </NeoCard>
+        </div>
 
         <div className="h-6" />
 
@@ -139,143 +142,205 @@ export default function DashboardScreen() {
           </p>
         </NeoCard>
 
-        <div className="h-12" />
-
+        <div className="h-6" />
         <div className="flex flex-row justify-between items-center px-1 mb-4">
-          <h2 className="text-white text-lg font-bold ml-1">Símbolo Seleccionado</h2>
-          <button 
-            className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/20"
-            onClick={() => setDropdownVisible(true)}
-          >
-            <span className="text-white font-bold text-xs">{selectedSymbol || 'Ninguno'}</span>
-          </button>
+          <h2 className="text-white text-lg font-bold ml-1">Símbolos Operando</h2>
         </div>
 
-        {(() => {
-          if (!status || !selectedSymbol) return null;
-          const symbol = selectedSymbol;
-          const isPaper = status.execution_mode === 'PAPER_TRADING';
-          const position = status.open_positions?.find((p) => p.symbol === symbol);
-          const standaloneOrders = status.open_orders?.filter(o => o.symbol === symbol) || [];
-          
-          return (
-            <div key={symbol} className="mb-4">
-              <div
-                className={`transition-opacity ${position ? 'cursor-pointer hover:opacity-80 active:opacity-70' : ''}`}
-                onClick={() => {
-                  if (position) {
-                    setSelectedPosition(position);
-                    setChartModalVisible(true);
-                  }
-                }}
-              >
-                <NeoCard
-                  title={symbol}
-                  value={
-                    position
-                      ? (isPaper ? 'EN POSICIÓN (SIMULADO)' : 'EN POSICIÓN')
-                      : (standaloneOrders.length > 0
-                          ? (isPaper ? 'ORDEN PENDIENTE (SIMULADO)' : 'ÓRDENES PENDIENTES')
-                          : 'MONITOREANDO')
-                  }
-                  trend={position ? {
-                    value: `${position.unrealizedPnl >= 0 ? '+' : ''}${position.unrealizedPnl.toFixed(2)} USDT`,
-                    direction: position.unrealizedPnl >= 0 ? 'up' : 'down'
-                  } : undefined}
-                >
-                {position ? (
-                  <div className="mt-3 bg-black/20 p-3 rounded-lg">
-                    <div className="flex flex-row items-center mb-1.5">
-                      <NeoBadge
-                        label={isPaper ? '🧪 SIMULADO' : 'REAL'}
-                        variant={isPaper ? 'warning' : 'primary'}
-                      />
-                    </div>
-                    <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Lado:</span> {position.side.toUpperCase()}</p>
-                    <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Entrada:</span> {position.entryPrice}</p>
-                    <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Actual:</span> {position.markPrice}</p>
-                    <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Apalancamiento:</span> {position.leverage}x</p>
-                    
-                    {position.orders && position.orders.length > 0 && (
-                      <div className="mt-2 border-t border-white/10 pt-2">
-                        <p className="font-bold text-[#4DA8DA]">Órdenes Pendientes de Salida:</p>
-                        {position.orders.map((ord, idx) => {
-                          let expectedPnL = 0;
-                          if (position.side.toLowerCase() === 'long' || position.side.toLowerCase() === 'buy') {
-                            expectedPnL = (ord.price - position.entryPrice) * position.contracts;
-                          } else {
-                            expectedPnL = (position.entryPrice - ord.price) * position.contracts;
-                          }
-                          const isProfit = expectedPnL > 0;
-                          
-                          return (
-                            <p key={idx} className="text-white/90 text-sm mb-1">
-                              • {ord.type}: {ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%) 
-                              <span className={isProfit ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
-                                {' '}[PnL: {expectedPnL > 0 ? '+' : ''}{expectedPnL.toFixed(2)} USDT]
-                              </span>
-                            </p>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ) : standaloneOrders.length > 0 ? (
-                  <div className="mt-3 bg-black/20 p-3 rounded-lg">
-                    {status.latest_prices && status.latest_prices[symbol] && (
-                        <div className="mb-4 bg-white/5 p-2.5 rounded-lg flex flex-col items-center">
-                            <p className="text-[#A0A0A0] text-xs mt-2">Precio Actual</p>
-                            <p className="font-bold text-white text-lg mt-1">
-                                {status.latest_prices[symbol].toFixed(4)}
-                            </p>
-                        </div>
-                    )}
-                    <div className="flex flex-row items-center mb-2 gap-2">
-                      <p className="font-bold text-[#4DA8DA]">Órdenes de Entrada Abiertas:</p>
-                      <NeoBadge
-                        label={isPaper ? '🧪 SIMULADO' : 'REAL'}
-                        variant={isPaper ? 'warning' : 'primary'}
-                      />
-                    </div>
-                    {standaloneOrders.map((ord, idx) => (
-                      <div key={idx} className="mb-2.5">
-                        <NeoBadge 
-                          label={`${ord.side} ${ord.type}`} 
-                          variant={ord.side === 'BUY' ? 'success' : 'danger'} 
-                        />
-                        <p className="text-white/90 text-sm mb-1 mt-1">Precio: {ord.price.toFixed(4)} | Cant: {ord.amount}</p>
-                        <p className="text-white/70 text-xs mt-0.5">
-                          Estado: {ord.status === 'pending (simulado)' ? 'Esperando que el precio la toque…' : ord.status}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-3 flex flex-col items-center">
-                    <p className="text-[#A0A0A0] text-sm text-center">Estado Actual del Bot:</p>
-                    <p className="font-bold text-[#4DA8DA] mt-2 text-center text-base">
-                        {status.status.toUpperCase()}
-                    </p>
-                    
-                    {status.latest_prices && status.latest_prices[symbol] && (
-                        <div className="mt-4 bg-white/5 p-3 rounded-lg flex flex-col items-center w-full max-w-xs">
-                            <p className="text-[#A0A0A0] text-xs">Precio Actual en Vivo</p>
-                            <p className="font-bold text-white text-xl mt-1">
-                                {status.latest_prices[symbol].toFixed(4)}
-                            </p>
-                        </div>
-                    )}
+        {status?.active_symbols && status.active_symbols.length > 0 ? (
+          status.active_symbols.map((symbol) => {
+            const isPaper = status.execution_mode === 'PAPER_TRADING';
+            const position = status.open_positions?.find((p) => p.symbol === symbol);
+            const standaloneOrders = status.open_orders?.filter(o => o.symbol === symbol) || [];
+            
+            const livePnl = position && position.unrealizedPnl !== undefined 
+              ? position.unrealizedPnl 
+              : 0;
 
-                    <p className="text-[#808080] mt-3 text-center text-[13px]">
-                        El bot está monitoreando oportunidades para entrar al mercado.
-                    </p>
-                  </div>
-                )}
-              </NeoCard>
+            const handleClosePosition = async (e: React.MouseEvent, sym: string) => {
+              e.stopPropagation();
+              setClosingSymbol(sym);
+              try {
+                await closePosition(sym);
+                const data = await getStatus();
+                setStatus(data);
+              } catch (err) {
+                console.error(err);
+                alert('Error cerrando la posición.');
+              } finally {
+                setClosingSymbol(null);
+              }
+            };
+            
+            return (
+              <div key={symbol} className="mb-4">
+                <div
+                  className={`transition-opacity ${position ? 'cursor-pointer hover:opacity-80 active:opacity-70' : ''}`}
+                  onClick={() => {
+                    if (position) {
+                      setSelectedPosition(position);
+                      setChartModalVisible(true);
+                    }
+                  }}
+                >
+                  <NeoCard
+                    title={symbol}
+                    value={
+                      position
+                        ? (isPaper ? 'EN POSICIÓN (SIMULADO)' : 'EN POSICIÓN')
+                        : (standaloneOrders.length > 0
+                            ? (isPaper ? 'ORDEN PENDIENTE (SIMULADO)' : 'ÓRDENES PENDIENTES')
+                            : 'MONITOREANDO')
+                    }
+                  >
+                  <div className="absolute inset-0 bg-white/10 opacity-0 active:opacity-100 transition-opacity rounded-[var(--neo-radius)] pointer-events-none"></div>
+                  {position ? (
+                    <div className="mt-3 bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-lg relative shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
+                      <div className="absolute top-3 right-3 flex gap-2">
+                        <NeoButton 
+                          variant="secondary" 
+                          size="small" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
+                          }} 
+                        >
+                          Gráfico
+                        </NeoButton>
+                        <NeoButton 
+                          variant="danger" 
+                          size="small" 
+                          onClick={(e) => handleClosePosition(e, position.symbol)} 
+                          disabled={closingSymbol === position.symbol}
+                        >
+                          {closingSymbol === position.symbol ? 'Cerrando...' : 'Cerrar'}
+                        </NeoButton>
+                      </div>
+                      <div className="flex flex-row items-center mb-1.5 mt-2">
+                        <NeoBadge
+                          label={isPaper ? '🧪 SIMULADO' : 'REAL'}
+                          variant={isPaper ? 'warning' : 'primary'}
+                        />
+                      </div>
+                      <p className="text-white/90 text-sm mb-1.5 mt-4">
+                        <span className="font-bold text-[#4DA8DA]">PNL:</span>{' '}
+                        <span className={`font-bold text-lg ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                          {livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT
+                        </span>
+                      </p>
+                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Lado:</span> {position.side.toLowerCase() === 'buy' || position.side.toLowerCase() === 'long' ? 'LONG' : 'SHORT'}</p>
+                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Entrada:</span> {position.entryPrice}</p>
+                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Actual:</span> {position.markPrice}</p>
+                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Apalancamiento:</span> {position.leverage}x</p>
+                      
+                      {position.orders && position.orders.length > 0 && (
+                        <div className="mt-2 border-t border-white/10 pt-2">
+                          <p className="font-bold text-[#4DA8DA]">Órdenes Pendientes de Salida:</p>
+                          {position.orders.map((ord, idx) => {
+                            let expectedPnL = 0;
+                            if (position.side.toLowerCase() === 'long' || position.side.toLowerCase() === 'buy') {
+                              expectedPnL = (ord.price - position.entryPrice) * position.contracts;
+                            } else {
+                              expectedPnL = (position.entryPrice - ord.price) * position.contracts;
+                            }
+                            const isProfit = expectedPnL > 0;
+                            
+                            return (
+                              <p key={idx} className="text-white/90 text-sm mb-1">
+                                • {ord.type}: {ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%) 
+                                <span className={isProfit ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
+                                  {' '}[PnL: {expectedPnL > 0 ? '+' : ''}{expectedPnL.toFixed(2)} USDT]
+                                </span>
+                              </p>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : standaloneOrders.length > 0 ? (
+                    <div className="mt-3 bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-lg relative shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
+                      <div className="absolute top-3 right-3 flex gap-2">
+                        <NeoButton 
+                          variant="secondary" 
+                          size="small" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
+                          }} 
+                        >
+                          Gráfico
+                        </NeoButton>
+                      </div>
+                      {status.latest_prices && status.latest_prices[symbol] && (
+                          <div className="mb-4 bg-white/5 p-2.5 rounded-lg flex flex-col items-center">
+                              <p className="text-[#A0A0A0] text-xs mt-2">Precio Actual</p>
+                              <p className="font-bold text-white text-lg mt-1">
+                                  {status.latest_prices[symbol].toFixed(4)}
+                              </p>
+                          </div>
+                      )}
+                      <div className="flex flex-row items-center mb-2 gap-2 mt-2">
+                        <p className="font-bold text-[#4DA8DA]">Órdenes de Entrada Abiertas:</p>
+                        <NeoBadge
+                          label={isPaper ? '🧪 SIMULADO' : 'REAL'}
+                          variant={isPaper ? 'warning' : 'primary'}
+                        />
+                      </div>
+                      {standaloneOrders.map((ord, idx) => (
+                        <div key={idx} className="mb-2.5">
+                          <NeoBadge 
+                            label={`${ord.side} ${ord.type}`} 
+                            variant={ord.side === 'BUY' ? 'success' : 'danger'} 
+                          />
+                          <p className="text-white/90 text-sm mb-1 mt-1">Precio: {ord.price.toFixed(4)} | Cant: {ord.amount}</p>
+                          <p className="text-white/70 text-xs mt-0.5">
+                            Estado: {ord.status === 'pending (simulado)' ? 'Esperando que el precio la toque…' : ord.status}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-3 flex flex-col items-center relative mt-3 bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-lg shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
+                      <div className="absolute top-2 right-2">
+                        <NeoButton 
+                          variant="secondary" 
+                          size="small" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
+                          }} 
+                        >
+                          Gráfico
+                        </NeoButton>
+                      </div>
+                      <p className="text-[#A0A0A0] text-sm text-center">Estado Actual del Bot:</p>
+                      <p className="font-bold text-[#4DA8DA] mt-2 text-center text-base">
+                          {status.status.toUpperCase()}
+                      </p>
+                      
+                      {status.latest_prices && status.latest_prices[symbol] && (
+                          <div className="mt-4 bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-lg flex flex-col items-center w-full max-w-xs shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
+                              <p className="text-[#A0A0A0] text-xs">Precio Actual en Vivo</p>
+                              <p className="font-bold text-white text-xl mt-1">
+                                  {status.latest_prices[symbol].toFixed(4)}
+                              </p>
+                          </div>
+                      )}
+                    </div>
+                  )}
+                  </NeoCard>
+                </div>
               </div>
-            </div>
-          );
-        })()}
+            );
+          })
+        ) : (
+          <div className="py-3 flex flex-col items-center">
+            <p className="text-[#A0A0A0] text-sm text-center">Estado Actual del Bot:</p>
+            <p className="font-bold text-[#4DA8DA] mt-2 text-center text-base">
+                {status?.status?.toUpperCase() || 'ESPERANDO...'}
+            </p>
+          </div>
+        )}
 
       </div>
 

@@ -1,0 +1,74 @@
+import React, { useEffect, useState } from 'react';
+import { NeoLayout, NeoCard, NeoBadge } from 'jeikei-design-system';
+import { getGlobalHistory, type GlobalTradeRecord } from '../services/api';
+
+export default function HistoryScreen() {
+  const [history, setHistory] = useState<GlobalTradeRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchHistory = async () => {
+    try {
+      // Fetch more for the full page
+      const data = await getGlobalHistory(50);
+      setHistory(data.data);
+    } catch (e) {
+      console.error('Error fetching global history', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  return (
+    <NeoLayout>
+      <div className="p-6 pt-16 md:p-10 pb-32 max-w-4xl mx-auto w-full">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-white mb-2">Historial de Órdenes</h1>
+          <p className="text-white/60 text-sm">Registro de posiciones completadas y operaciones ejecutadas.</p>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center h-40">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#34d8ff]"></div>
+          </div>
+        ) : history.length === 0 ? (
+          <div className="text-center text-white/40 text-lg mt-20">
+            No hay operaciones recientes
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {history.map((trade, idx) => (
+              <NeoCard key={idx} title={trade.symbol}>
+                <div className="mt-2 flex flex-col gap-2">
+                  <div className="flex justify-between items-center">
+                    <NeoBadge
+                      label={trade.side === 'LONG' || trade.side === 'buy' ? 'LONG' : 'SHORT'}
+                      variant={trade.side === 'LONG' || trade.side === 'buy' ? 'success' : 'danger'}
+                    />
+                    <div className={`font-bold text-lg ${trade.pnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                      PNL: {trade.pnl > 0 ? '+' : ''}{trade.pnl.toFixed(2)} USDT
+                    </div>
+                  </div>
+                  
+                  <div className="bg-black/20 p-3 rounded-lg flex flex-col gap-1 mt-2">
+                    <p className="text-white/90 text-sm"><span className="font-bold text-[#4DA8DA]">Precio Entrada:</span> {trade.entry_price}</p>
+                    <p className="text-white/90 text-sm"><span className="font-bold text-[#4DA8DA]">Precio Salida:</span> {trade.exit_price || 'N/A'}</p>
+                    {trade.tp_price && <p className="text-white/70 text-xs"><span className="font-bold">Take Profit (TP):</span> {trade.tp_price}</p>}
+                    {trade.sl_price && <p className="text-white/70 text-xs"><span className="font-bold">Stop Loss (SL):</span> {trade.sl_price}</p>}
+                    <p className="text-white/70 text-xs"><span className="font-bold">Apalancamiento:</span> {trade.leverage}x</p>
+                    <p className="text-white/50 text-xs mt-2">
+                      Completada: {new Date(trade.closed_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </NeoCard>
+            ))}
+          </div>
+        )}
+      </div>
+    </NeoLayout>
+  );
+}

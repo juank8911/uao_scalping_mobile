@@ -15,6 +15,10 @@ export interface StandaloneOrderInfo {
   side: string;
   price: number;
   amount: number;
+  tpPrice?: number;
+  slPrice?: number;
+  aiReason?: string;
+  confidence?: number;
   status: string;
 }
 
@@ -28,6 +32,7 @@ export interface PositionInfo {
   markPrice: number;
   unrealizedPnl: number;
   leverage: number;
+  confidence?: number;
   orders?: AttachedOrderInfo[];
 }
 
@@ -293,4 +298,39 @@ export const saveCredentials = async (
     return await response.json();
   }
   throw new Error('Error saving credentials');
+};
+
+export const closePosition = async (symbol: string) => {
+  return await fetchWithAuth(`${BASE_URL}/close-position`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ symbol })
+  });
+};
+
+export interface GlobalTradeRecord {
+  symbol: string;
+  side: string;
+  entry_price: number;
+  exit_price: number;
+  tp_price?: number;
+  sl_price?: number;
+  pnl: number;
+  closed_at: string;
+  leverage: number;
+}
+
+export const getGlobalHistory = async (limit: number = 20): Promise<{data: GlobalTradeRecord[]}> => {
+  const response = await fetchWithAuth(`${BASE_URL}/history?limit=${limit}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  if (response.ok) {
+    return await response.json();
+  }
+  throw new Error('Network error fetching history');
 };
