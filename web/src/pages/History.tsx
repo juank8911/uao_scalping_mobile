@@ -88,8 +88,8 @@ export default function HistoryScreen() {
                 <div className="mt-2 flex flex-col gap-2">
                   <div className="flex justify-between items-center">
                     <NeoBadge
-                      label={trade.side === 'LONG' || trade.side === 'buy' ? 'LONG' : 'SHORT'}
-                      variant={trade.side === 'LONG' || trade.side === 'buy' ? 'success' : 'danger'}
+                      label={trade.side === 'LONG' || trade.side === 'BUY' || trade.side === 'buy' ? 'LONG' : 'SHORT'}
+                      variant={trade.side === 'LONG' || trade.side === 'BUY' || trade.side === 'buy' ? 'success' : 'danger'}
                     />
                     <div className={`font-bold text-lg ${trade.pnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
                       PNL: {trade.pnl > 0 ? '+' : ''}{trade.pnl.toFixed(2)} USDT

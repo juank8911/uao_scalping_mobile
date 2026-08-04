@@ -13,6 +13,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['jeikei-design-system'],
+    force: true,
   },
   server: {
     port: 5173,

@@ -364,8 +364,8 @@ export default function ChartScreen() {
                             <div className="flex-1">
                               <div className="flex flex-row items-center mb-1">
                                 <NeoBadge 
-                                  label={trade.side} 
-                                  variant={trade.side === 'BUY' ? 'success' : 'danger'} 
+                                  label={trade.side === 'BUY' || trade.side === 'LONG' ? 'LONG' : 'SHORT'} 
+                                  variant={trade.side === 'BUY' || trade.side === 'LONG' ? 'success' : 'danger'} 
                                 />
                                 <span className="text-white/40 text-xs ml-2">
                                   {new Date(trade.time * 1000).toLocaleTimeString()}

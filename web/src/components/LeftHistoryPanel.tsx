@@ -62,8 +62,8 @@ export const LeftHistoryPanel: React.FC = () => {
               <div key={idx} className="bg-black/40 p-3 rounded-lg border border-white/5 hover:border-[#34d8ff]/20 transition-colors">
                 <div className="flex justify-between items-center mb-2">
                   <div className="flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${trade.side === 'LONG' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
-                      {trade.side}
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${trade.side === 'LONG' || trade.side === 'BUY' || trade.side === 'buy' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
+                      {trade.side === 'BUY' || trade.side === 'buy' ? 'LONG' : trade.side === 'SELL' || trade.side === 'sell' ? 'SHORT' : trade.side.toUpperCase()}
                     </span>
                     <span className="text-white font-bold text-sm">{trade.symbol}</span>
                   </div>
