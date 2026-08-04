@@ -8,8 +8,8 @@ export default function HistoryScreen() {
 
   const fetchHistory = async () => {
     try {
-      // Fetch more for the full page
-      const data = await getGlobalHistory(50);
+      // Traemos un límite alto (1000) ya que el backend ahora filtra por las últimas 24 horas automáticamente
+      const data = await getGlobalHistory(1000);
       setHistory(data.data);
     } catch (e) {
       console.error('Error fetching global history', e);
@@ -22,6 +22,15 @@ export default function HistoryScreen() {
     fetchHistory();
   }, []);
 
+  const totalOrders = history.length;
+  const tpOrders = history.filter(t => t.pnl > 0);
+  const slOrders = history.filter(t => t.pnl <= 0);
+  
+  const tpCount = tpOrders.length;
+  const slCount = slOrders.length;
+  const totalTpUsdt = tpOrders.reduce((sum, t) => sum + t.pnl, 0);
+  const totalSlUsdt = slOrders.reduce((sum, t) => sum + t.pnl, 0);
+
   return (
     <NeoLayout>
       <div className="p-6 pt-16 md:p-10 pb-32 max-w-4xl mx-auto w-full">
@@ -29,6 +38,40 @@ export default function HistoryScreen() {
           <h1 className="text-2xl font-bold text-white mb-2">Historial de Órdenes</h1>
           <p className="text-white/60 text-sm">Registro de posiciones completadas y operaciones ejecutadas.</p>
         </div>
+
+        {!isLoading && history.length > 0 && (
+          <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <NeoCard>
+              <div className="text-center">
+                <p className="text-white/60 text-xs mb-1">Total Órdenes</p>
+                <p className="text-2xl font-bold text-white">{totalOrders}</p>
+              </div>
+            </NeoCard>
+            <NeoCard>
+              <div className="text-center">
+                <p className="text-white/60 text-xs mb-1">Operaciones TP</p>
+                <p className="text-2xl font-bold text-[#00ff88]">{tpCount}</p>
+                <p className="text-xs text-[#00ff88]/80 mt-1">+{totalTpUsdt.toFixed(2)} USDT</p>
+              </div>
+            </NeoCard>
+            <NeoCard>
+              <div className="text-center">
+                <p className="text-white/60 text-xs mb-1">Operaciones SL</p>
+                <p className="text-2xl font-bold text-[#ff3366]">{slCount}</p>
+                <p className="text-xs text-[#ff3366]/80 mt-1">{totalSlUsdt.toFixed(2)} USDT</p>
+              </div>
+            </NeoCard>
+            <NeoCard>
+              <div className="text-center">
+                <p className="text-white/60 text-xs mb-1">PnL Neto</p>
+                <p className={`text-2xl font-bold ${(totalTpUsdt + totalSlUsdt) >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                  {((totalTpUsdt + totalSlUsdt) > 0 ? '+' : '')}{(totalTpUsdt + totalSlUsdt).toFixed(2)}
+                </p>
+                <p className="text-xs text-white/40 mt-1">USDT</p>
+              </div>
+            </NeoCard>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center items-center h-40">
