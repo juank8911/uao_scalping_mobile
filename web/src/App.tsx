@@ -13,7 +13,7 @@ import { getToken } from './utils/auth';
 
 import { RightSidebarNavigation } from './components/RightSidebarNavigation';
 import { LeftHistoryPanel } from './components/LeftHistoryPanel';
-import { NeuralBackground } from 'jeikei-design-system';
+import { TradeNotifications } from './components/TradeNotifications';
 
 const PrivateRoute = () => {
   const navigate = useNavigate();
@@ -32,7 +32,11 @@ const PrivateRoute = () => {
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-black relative">
-      <NeuralBackground />
+      {/* Optimized Static Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#020202] via-[#050505] to-[#0a0a0a] -z-20" />
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('/noise.svg')] mix-blend-overlay -z-10" />
+      
+      <TradeNotifications />
       <LeftHistoryPanel />
       
       <main className="flex-1 overflow-y-auto relative z-10">
