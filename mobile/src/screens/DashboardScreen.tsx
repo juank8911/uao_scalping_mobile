@@ -100,24 +100,66 @@ export default function DashboardScreen() {
         </View>
 
         <NeoCard
-          title="Global Balance"
+          title="Global Balance & PnL"
           value={status && status.global_balance !== undefined ? `$${status.global_balance.toFixed(2)}` : '...'}
           trend={{ value: 'USDT', direction: 'up' }}
         >
-          <Text style={styles.text}>Balance total disponible según el modo actual ({status?.execution_mode || '...'}).</Text>
+          <View style={styles.balanceDetails}>
+            <Text style={styles.text}>PnL del Día:</Text>
+            <Text style={[styles.textBold, { color: status && status.daily_pnl >= 0 ? '#00ff88' : '#ff3366' }]}>
+              {status && status.daily_pnl >= 0 ? '+' : ''}{status ? status.daily_pnl.toFixed(2) : '0.00'} USDT
+            </Text>
+          </View>
+          <Text style={styles.textSmall}>Modo: {status?.execution_mode || '...'}</Text>
         </NeoCard>
 
         <View style={{ height: 24 }} />
 
         <NeoCard
-          title="Daily PnL"
-          value={status ? `$${status.daily_pnl.toFixed(2)}` : '...'}
+          title="Posiciones Actuales"
+          value={status?.open_positions?.length ? `${status.open_positions.length} Abierta(s)` : 'Ninguna'}
           trend={{
-            value: status && status.daily_pnl >= 0 ? 'PROFIT' : 'LOSS',
-            direction: status && status.daily_pnl >= 0 ? 'up' : 'down'
+            value: 'EN VIVO',
+            direction: status?.open_positions?.length ? 'up' : 'down'
           }}
         >
-          <Text style={styles.text}>Rendimiento acumulado de hoy.</Text>
+          <View style={styles.positionsContainer}>
+            {!status?.open_positions?.length ? (
+              <Text style={styles.textSmallCenter}>No hay posiciones activas en este momento.</Text>
+            ) : (
+              status.open_positions.map((pos, idx) => {
+                const contractSize = (pos as any).contractSize || 1.0;
+                const margin = (pos.contracts * contractSize * pos.entryPrice) / pos.leverage;
+                const roi = margin > 0 ? (pos.unrealizedPnl / margin) * 100 : 0;
+                const valueUsdt = pos.contracts * contractSize * pos.markPrice;
+                const isLong = pos.side.toLowerCase() === 'buy' || pos.side.toLowerCase() === 'long';
+
+                return (
+                  <View key={idx} style={styles.positionItem}>
+                    <View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.positionSymbol}>{pos.symbol}</Text>
+                        <View style={[styles.sideBadge, { backgroundColor: isLong ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 51, 102, 0.2)' }]}>
+                          <Text style={[styles.sideText, { color: isLong ? '#00ff88' : '#ff3366' }]}>
+                            {pos.side.toUpperCase()} {pos.leverage}x
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.positionSubtext}>
+                        Cant: {pos.contracts} | USDT: ${valueUsdt.toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.positionPrice}>${pos.markPrice.toFixed(7)}</Text>
+                      <Text style={[styles.positionRoi, { color: roi >= 0 ? '#00ff88' : '#ff3366' }]}>
+                        {roi >= 0 ? '+' : ''}{roi.toFixed(2)}%
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </View>
         </NeoCard>
 
         <View style={{ height: 24 }} />
@@ -360,6 +402,74 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 12,
     marginTop: 8,
+  },
+  balanceDetails: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    paddingTop: 8,
+  },
+  textBold: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  textSmall: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10,
+    marginTop: 4,
+  },
+  positionsContainer: {
+    marginTop: 8,
+    maxHeight: 150,
+  },
+  textSmallCenter: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  positionItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  positionSymbol: {
+    fontWeight: 'bold',
+    color: '#ffffff',
+    fontSize: 12,
+  },
+  sideBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 4,
+    borderRadius: 4,
+  },
+  sideText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  positionSubtext: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  positionPrice: {
+    color: '#ffffff',
+    fontFamily: 'monospace',
+    fontSize: 12,
+  },
+  positionRoi: {
+    fontWeight: 'bold',
+    fontSize: 12,
+    marginTop: 2,
   },
   sectionTitle: {
     color: '#FFFFFF',

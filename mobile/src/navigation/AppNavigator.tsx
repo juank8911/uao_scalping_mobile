@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/LoginScreen';
-import MainTabs from './MainTabs';
+import MainDrawer from './MainDrawer';
 import { getToken } from '../utils/auth';
 import { View, ActivityIndicator } from 'react-native';
 import { NeoLayout } from 'jeikei-design-system/native';
@@ -43,11 +43,11 @@ export default function AppNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName={isAuthenticated ? 'MainTabs' : 'Login'}
+      initialRouteName={isAuthenticated ? 'MainDrawer' : 'Login'}
       screenOptions={{ headerShown: false }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="MainTabs" component={MainTabs} />
+      <Stack.Screen name="MainDrawer" component={MainDrawer} />
     </Stack.Navigator>
   );
 }

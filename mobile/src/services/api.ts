@@ -307,3 +307,54 @@ export const saveCredentials = async (
   }
   throw new Error('Error saving credentials');
 };
+
+export interface GlobalTradeRecord {
+  symbol: string;
+  side: string;
+  entry_price: number;
+  exit_price: number;
+  tp_price?: number;
+  sl_price?: number;
+  pnl: number;
+  closed_at: string;
+  leverage: number;
+}
+
+export const getGlobalHistory = async (limit: number = 20): Promise<{data: GlobalTradeRecord[]}> => {
+  const response = await fetchWithAuth(`${API_BASE_URL}/history?limit=${limit}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  if (response.ok) {
+    return await response.json();
+  } else {
+    throw new Error('Error fetching global history');
+  }
+};
+
+export const closePosition = async (symbol: string) => {
+  const response = await fetchWithAuth(`${API_BASE_URL}/control/close_position?symbol=${encodeURIComponent(symbol)}`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error('Error al cerrar la posicion');
+  }
+  return await response.json();
+};
+
+export const apiFetchTelegram = async (path: string, opts: RequestInit = {}) => {
+  const response = await fetchWithAuth(`${API_BASE_URL}/telegram${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    },
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ detail: 'Error desconocido' }));
+    throw new Error(err.detail || `Error ${response.status}`);
+  }
+  return response.json();
+};

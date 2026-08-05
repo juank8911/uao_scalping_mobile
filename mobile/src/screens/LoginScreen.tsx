@@ -21,7 +21,7 @@ export default function LoginScreen({ navigation }: any) {
       }
       
       await login(username, password);
-      navigation.replace('MainTabs');
+      navigation.replace('MainDrawer');
     } catch (err: any) {
       setError(err.message || 'Credenciales inválidas.');
     }
