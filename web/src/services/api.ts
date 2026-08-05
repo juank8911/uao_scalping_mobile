@@ -28,6 +28,7 @@ export interface PositionInfo {
   symbol: string;
   side: string;
   contracts: number;
+  contractSize?: number;
   entryPrice: number;
   markPrice: number;
   unrealizedPnl: number;

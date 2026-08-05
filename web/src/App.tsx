@@ -14,8 +14,10 @@ import { getToken } from './utils/auth';
 import { RightSidebarNavigation } from './components/RightSidebarNavigation';
 import { LeftHistoryPanel } from './components/LeftHistoryPanel';
 import { TradeNotifications } from './components/TradeNotifications';
+import { useTelegramNotifications } from './hooks/useTelegramNotifications';
 
 const PrivateRoute = () => {
+  useTelegramNotifications();
   const navigate = useNavigate();
 
   useEffect(() => {

@@ -95,8 +95,8 @@ export default function ChartScreen() {
         wickDownColor: '#f87171',
         priceFormat: {
           type: 'price',
-          precision: 5,
-          minMove: 0.00001,
+          precision: 7,
+          minMove: 0.0000001,
         },
       });
 
@@ -331,7 +331,7 @@ export default function ChartScreen() {
                                 label={ord.type} 
                                 variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'} 
                               />
-                              <span className="text-white/90 text-sm">{ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%)</span>
+                              <span className="text-white/90 text-sm">{ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)</span>
                             </div>
                           ))}
                         </div>
@@ -346,7 +346,7 @@ export default function ChartScreen() {
                             label={`${ord.side} ${ord.type}`} 
                             variant={ord.side === 'BUY' ? 'success' : 'danger'} 
                           />
-                          <span className="text-white/90 text-sm">{ord.price.toFixed(4)} (Cant: {ord.amount})</span>
+                          <span className="text-white/90 text-sm">{ord.price.toFixed(7)} (Cant: {ord.amount})</span>
                         </div>
                       ))}
                     </div>
@@ -371,8 +371,8 @@ export default function ChartScreen() {
                                   {new Date(trade.time * 1000).toLocaleTimeString()}
                                 </span>
                               </div>
-                              <p className="text-white/70 text-[13px]">Entrada: {trade.entryPrice.toFixed(4)}</p>
-                              <p className="text-white/70 text-[13px]">Salida: {trade.exitPrice.toFixed(4)}</p>
+                              <p className="text-white/70 text-[13px]">Entrada: {trade.entryPrice.toFixed(7)}</p>
+                              <p className="text-white/70 text-[13px]">Salida: {trade.exitPrice.toFixed(7)}</p>
                             </div>
                             <div className="flex items-center justify-end">
                               <span className={`font-bold text-base ${trade.pnl >= 0 ? 'text-[#4ade80]' : 'text-[#f87171]'}`}>

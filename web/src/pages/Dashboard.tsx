@@ -106,22 +106,59 @@ export default function DashboardScreen() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <NeoCard
-            title="Global Balance"
+            title="Global Balance & PnL"
             value={status && status.global_balance !== undefined ? `$${status.global_balance.toFixed(2)}` : '...'}
             trend={{ value: 'USDT', direction: 'up' }}
           >
-            <p className="text-white/70 text-xs mt-2">Balance total disponible según el modo actual ({status?.execution_mode || '...'}).</p>
+            <div className="flex justify-between items-center mt-2 border-t border-white/10 pt-2">
+              <span className="text-white/70 text-sm">PnL del Día:</span>
+              <span className={`font-bold ${status && status.daily_pnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                {status && status.daily_pnl >= 0 ? '+' : ''}{status ? status.daily_pnl.toFixed(2) : '0.00'} USDT
+              </span>
+            </div>
+            <p className="text-white/50 text-[10px] mt-1">Modo: {status?.execution_mode || '...'}</p>
           </NeoCard>
 
           <NeoCard
-            title="Daily PnL"
-            value={status ? `$${status.daily_pnl.toFixed(2)}` : '...'}
+            title="Posiciones Actuales"
+            value={status?.open_positions?.length ? `${status.open_positions.length} Abierta(s)` : 'Ninguna'}
             trend={{
-              value: status && status.daily_pnl >= 0 ? 'PROFIT' : 'LOSS',
-              direction: status && status.daily_pnl >= 0 ? 'up' : 'down'
+              value: 'EN VIVO',
+              direction: status?.open_positions?.length ? 'up' : 'down'
             }}
           >
-            <p className="text-white/70 text-xs mt-2">Rendimiento acumulado de hoy.</p>
+            <div className="mt-2 space-y-2 max-h-[100px] overflow-y-auto pr-1 custom-scrollbar">
+              {!status?.open_positions?.length ? (
+                <p className="text-white/50 text-xs">No hay posiciones activas en este momento.</p>
+              ) : (
+                status.open_positions.map((pos, idx) => {
+                  const contractSize = (pos as any).contractSize || 1.0;
+                  const margin = (pos.contracts * contractSize * pos.entryPrice) / pos.leverage;
+                  const roi = margin > 0 ? (pos.unrealizedPnl / margin) * 100 : 0;
+                  const valueUsdt = pos.contracts * contractSize * pos.markPrice;
+                  
+                  return (
+                    <div key={idx} className="bg-white/5 p-2 rounded border border-white/5 text-xs flex justify-between items-center">
+                      <div>
+                        <span className="font-bold text-white">{pos.symbol}</span>
+                        <span className={`ml-2 px-1 rounded text-[9px] ${pos.side.toLowerCase() === 'buy' || pos.side.toLowerCase() === 'long' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
+                          {pos.side.toUpperCase()} {pos.leverage}x
+                        </span>
+                        <div className="text-white/70 mt-0.5">
+                          Cant: {pos.contracts} | USDT: ${valueUsdt.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-white font-mono">${pos.markPrice.toFixed(7)}</div>
+                        <div className={`font-bold ${roi >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                          {roi >= 0 ? '+' : ''}{roi.toFixed(2)}%
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </NeoCard>
         </div>
 
@@ -247,7 +284,7 @@ export default function DashboardScreen() {
                             
                             return (
                               <p key={idx} className="text-white/90 text-sm mb-1">
-                                • {ord.type}: {ord.price.toFixed(4)} ({ord.distance_pct.toFixed(2)}%) 
+                                • {ord.type}: {ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%) 
                                 <span className={isProfit ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
                                   {' '}[PnL: {expectedPnL > 0 ? '+' : ''}{expectedPnL.toFixed(2)} USDT]
                                 </span>
@@ -275,7 +312,7 @@ export default function DashboardScreen() {
                           <div className="mb-4 bg-white/5 p-2.5 rounded-lg flex flex-col items-center">
                               <p className="text-[#A0A0A0] text-xs mt-2">Precio Actual</p>
                               <p className="font-bold text-white text-lg mt-1">
-                                  {status.latest_prices[symbol].toFixed(4)}
+                                  {status.latest_prices[symbol].toFixed(7)}
                               </p>
                           </div>
                       )}
@@ -292,7 +329,7 @@ export default function DashboardScreen() {
                             label={`${ord.side} ${ord.type}`} 
                             variant={ord.side === 'BUY' ? 'success' : 'danger'} 
                           />
-                          <p className="text-white/90 text-sm mb-1 mt-1">Precio: {ord.price.toFixed(4)} | Cant: {ord.amount}</p>
+                          <p className="text-white/90 text-sm mb-1 mt-1">Precio: {ord.price.toFixed(7)} | Cant: {ord.amount}</p>
                           <p className="text-white/70 text-xs mt-0.5">
                             Estado: {ord.status === 'pending (simulado)' ? 'Esperando que el precio la toque…' : ord.status}
                           </p>
@@ -322,7 +359,7 @@ export default function DashboardScreen() {
                           <div className="mt-4 bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-lg flex flex-col items-center w-full max-w-xs shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
                               <p className="text-[#A0A0A0] text-xs">Precio Actual en Vivo</p>
                               <p className="font-bold text-white text-xl mt-1">
-                                  {status.latest_prices[symbol].toFixed(4)}
+                                  {status.latest_prices[symbol].toFixed(7)}
                               </p>
                           </div>
                       )}

@@ -57,7 +57,7 @@ export function TradeNotifications() {
               addNotification({
                 id: `hist-${record.symbol}-${record.closed_at}-${Math.random()}`,
                 message: `POSICIÓN CERRADA: ${record.symbol}`,
-                description: `${dir} | ${exitType} | PNL: ${isProfit ? '+' : ''}${record.pnl.toFixed(4)} USDT`,
+                description: `${dir} | ${exitType} | PNL: ${isProfit ? '+' : ''}${record.pnl.toFixed(7)} USDT`,
                 variant: isProfit ? 'success' : 'error'
               });
               
