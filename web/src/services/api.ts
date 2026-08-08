@@ -53,6 +53,8 @@ export interface UpdateConfig {
   max_concurrent_trades?: number;
   min_profit_target_usdt?: number;
   max_drawdown_usdt?: number;
+  investment_amount_usdt?: number;
+  leverage?: number;
   exchange_id?: string;
   demo_api_key?: string;
   demo_api_secret?: string;
@@ -334,4 +336,19 @@ export const getGlobalHistory = async (limit: number = 20): Promise<{data: Globa
     return await response.json();
   }
   throw new Error('Network error fetching history');
+};
+
+export const resetPaperBalance = async (): Promise<any> => {
+  try {
+    const response = await fetchWithAuth(`${BASE_URL}/paper_balance/reset`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Error resetting paper balance:', error);
+    throw error;
+  }
 };

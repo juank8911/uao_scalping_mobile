@@ -132,10 +132,9 @@ export default function DashboardScreen() {
                 <p className="text-white/50 text-xs">No hay posiciones activas en este momento.</p>
               ) : (
                 status.open_positions.map((pos, idx) => {
-                  const contractSize = (pos as any).contractSize || 1.0;
-                  const margin = (pos.contracts * contractSize * pos.entryPrice) / pos.leverage;
+                  const margin = (pos.contracts * pos.entryPrice) / pos.leverage;
                   const roi = margin > 0 ? (pos.unrealizedPnl / margin) * 100 : 0;
-                  const valueUsdt = pos.contracts * contractSize * pos.markPrice;
+                  const valueUsdt = pos.contracts * pos.markPrice;
                   
                   return (
                     <div key={idx} className="bg-white/5 p-2 rounded border border-white/5 text-xs flex justify-between items-center">
