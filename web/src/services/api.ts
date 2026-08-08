@@ -48,6 +48,9 @@ export interface SystemStatus {
   open_positions: PositionInfo[];
   open_orders: StandaloneOrderInfo[];
   latest_prices: Record<string, number>;
+  current_investment?: number;
+  current_leverage?: number;
+  current_target_pnl?: number;
 }
 
 export interface UpdateConfig {

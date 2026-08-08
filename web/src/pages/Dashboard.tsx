@@ -104,7 +104,32 @@ export default function DashboardScreen() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <NeoCard
+            title="Configuración Activa"
+            value={status?.is_running ? 'En Memoria' : 'Inactivo'}
+            trend={{ value: 'CONFIG', direction: status?.is_running ? 'up' : 'down' }}
+          >
+            <div className="flex justify-between items-center mt-2 border-t border-white/10 pt-2">
+              <span className="text-white/70 text-sm">Inversión:</span>
+              <span className="font-bold text-white">
+                {status?.current_investment ? `${status.current_investment} USDT` : '---'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-white/70 text-sm">Apalancamiento:</span>
+              <span className="font-bold text-white">
+                {status?.current_leverage ? `${status.current_leverage}x` : '---'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-white/70 text-sm">PnL Objetivo:</span>
+              <span className="font-bold text-[#00ff88]">
+                {status?.current_target_pnl ? `${status.current_target_pnl} USDT` : '---'}
+              </span>
+            </div>
+          </NeoCard>
+
           <NeoCard
             title="Global Balance & PnL"
             value={status && status.global_balance !== undefined ? `$${status.global_balance.toFixed(2)}` : '...'}
@@ -132,9 +157,10 @@ export default function DashboardScreen() {
                 <p className="text-white/50 text-xs">No hay posiciones activas en este momento.</p>
               ) : (
                 status.open_positions.map((pos, idx) => {
-                  const margin = (pos.contracts * pos.entryPrice) / pos.leverage;
+                  const contractSize = pos.contractSize || 1;
+                  const margin = (pos.contracts * contractSize * pos.entryPrice) / pos.leverage;
                   const roi = margin > 0 ? (pos.unrealizedPnl / margin) * 100 : 0;
-                  const valueUsdt = pos.contracts * pos.markPrice;
+                  const valueUsdt = pos.contracts * contractSize * pos.markPrice;
                   
                   return (
                     <div key={idx} className="bg-white/5 p-2 rounded border border-white/5 text-xs flex justify-between items-center">
@@ -143,8 +169,8 @@ export default function DashboardScreen() {
                         <span className={`ml-2 px-1 rounded text-[9px] ${pos.side.toLowerCase() === 'buy' || pos.side.toLowerCase() === 'long' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
                           {pos.side.toUpperCase()} {pos.leverage}x
                         </span>
-                        <div className="text-white/70 mt-0.5">
-                          Cant: {pos.contracts} | USDT: ${valueUsdt.toFixed(2)}
+                        <div className="text-white/70 mt-0.5 text-[10px]">
+                          Cant: {pos.contracts} | Total: ${valueUsdt.toFixed(2)} | Inv. Neta: ${margin.toFixed(2)}
                         </div>
                       </div>
                       <div className="text-right">
@@ -274,10 +300,11 @@ export default function DashboardScreen() {
                           <p className="font-bold text-[#4DA8DA]">Órdenes Pendientes de Salida:</p>
                           {position.orders.map((ord, idx) => {
                             let expectedPnL = 0;
+                            const contractSize = position.contractSize || 1;
                             if (position.side.toLowerCase() === 'long' || position.side.toLowerCase() === 'buy') {
-                              expectedPnL = (ord.price - position.entryPrice) * position.contracts;
+                              expectedPnL = (ord.price - position.entryPrice) * position.contracts * contractSize;
                             } else {
-                              expectedPnL = (position.entryPrice - ord.price) * position.contracts;
+                              expectedPnL = (position.entryPrice - ord.price) * position.contracts * contractSize;
                             }
                             const isProfit = expectedPnL > 0;
                             

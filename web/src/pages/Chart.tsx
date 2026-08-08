@@ -147,7 +147,8 @@ export default function ChartScreen() {
         if (currentPosition && currentPosition.entryPrice) {
           const side = currentPosition.side.toLowerCase();
           const assumedFee = 0.0010; // 0.1% round-trip conservative estimate
-          const bePrice = side === 'buy' || side === 'long'
+          const isLong = side === 'buy' || side === 'long';
+          const bePrice = isLong
             ? currentPosition.entryPrice * (1 + assumedFee)
             : currentPosition.entryPrice * (1 - assumedFee);
 
@@ -318,7 +319,7 @@ export default function ChartScreen() {
                         {livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT
                       </span>
                     </p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Lado:</span> {activePosition.side.toLowerCase() === 'buy' ? 'LONG' : 'SHORT'}</p>
+                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Lado:</span> {activePosition.side.toLowerCase() === 'buy' || activePosition.side.toLowerCase() === 'long' ? 'LONG' : 'SHORT'}</p>
                     <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Entrada:</span> {activePosition.entryPrice}</p>
                     <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Actual:</span> {activePosition.markPrice}</p>
                     <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Apalancamiento:</span> {activePosition.leverage}x</p>
