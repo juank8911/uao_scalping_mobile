@@ -34,6 +34,7 @@ export interface PositionInfo {
   unrealizedPnl: number;
   leverage: number;
   confidence?: number;
+  liquidationPrice?: number;
   orders?: AttachedOrderInfo[];
 }
 

@@ -27,7 +27,7 @@ export default function ChartScreen() {
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
-      const [data, creds] = await Promise.all([
+      const [data] = await Promise.all([
         getStatus(),
         getCredentials()
       ]);
@@ -129,7 +129,7 @@ export default function ChartScreen() {
         const currentPosition = status?.open_positions?.find(p => p.symbol === selectedSymbol);
         const currentOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
 
-        const chartOrders = [
+        const rawChartOrders = [
           ...currentOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
           ...(currentPosition?.orders || []).map(o => ({
             price: o.price,
@@ -137,6 +137,12 @@ export default function ChartScreen() {
             side: currentPosition?.side === 'long' ? 'SELL' : 'BUY'
           }))
         ];
+
+        const chartOrders = rawChartOrders.filter((value, index, self) =>
+          index === self.findIndex((t) => (
+            t.price === value.price && t.type === value.type
+          ))
+        );
 
         if (currentPosition && currentPosition.entryPrice) {
           const side = currentPosition.side.toLowerCase();
@@ -228,14 +234,7 @@ export default function ChartScreen() {
     (p) => p.symbol === selectedSymbol
   );
 
-  let bePriceForPnl = 0;
-  if (activePosition && activePosition.entryPrice) {
-    const side = activePosition.side.toLowerCase();
-    const assumedFee = 0.0010;
-    bePriceForPnl = side === 'buy' || side === 'long'
-      ? activePosition.entryPrice * (1 + assumedFee)
-      : activePosition.entryPrice * (1 - assumedFee);
-  }
+
 
   const livePnl = activePosition && activePosition.unrealizedPnl !== undefined
     ? activePosition.unrealizedPnl
