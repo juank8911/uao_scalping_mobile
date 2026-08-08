@@ -37,7 +37,12 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
     if (slOrder) { slPrice = slOrder.price; slDist = slOrder.distance_pct; }
   }
 
-  const isLong = position.side.toLowerCase() === 'long';
+  const isShort = position.side.toUpperCase() === 'SHORT' || position.side.toUpperCase() === 'SELL';
+  const csz = position.contractSize || 1;
+  const markP = position.markPrice || position.entryPrice;
+  const calculatedPnl = isShort
+    ? (position.entryPrice - markP) * position.contracts * csz
+    : (markP - position.entryPrice) * position.contracts * csz;
 
   return (
     <NeoModal 
@@ -53,17 +58,17 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 450 }}>
         <NeoCard
           title="Current Position"
-          value={isLong ? 'LONG' : 'SHORT'}
-          trend={{ value: `${position.unrealizedPnl.toFixed(2)} USDT`, direction: position.unrealizedPnl >= 0 ? 'up' : 'down' }}
+          value={isShort ? 'SHORT 🔴' : 'LONG 🟢'}
+          trend={{ value: `${calculatedPnl > 0 ? '+' : ''}${calculatedPnl.toFixed(2)} USDT`, direction: calculatedPnl >= 0 ? 'up' : 'down' }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>
             <div style={{ flex: 1 }}>
               <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 4px' }}>Entry Price</p>
-              <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0 }}>{position.entryPrice}</p>
+              <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>{position.entryPrice}</p>
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, margin: '0 0 4px' }}>Mark Price</p>
-              <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0 }}>{position.markPrice}</p>
+              <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>{markP}</p>
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12 }}>

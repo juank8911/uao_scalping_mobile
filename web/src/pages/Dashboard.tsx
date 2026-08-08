@@ -1,51 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
 import { getStatus, startEngine, stopEngine, closePosition } from '../services/api';
-import type { SystemStatus, PositionInfo } from '../services/api';
+import type { PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 import { PositionChartModal } from '../components/PositionChartModal';
+import { useEngineStore, useIsConnected } from '../store/useEngineStore';
+import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
+import PriceTicker from '../components/PriceTicker';
 
 export default function DashboardScreen() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState<SystemStatus | null>(null);
+
+  // --- Estado global (Zustand) ---
+  const status = useEngineStore((state) => state.status);
+  const isConnected = useIsConnected();
+
+  // --- Estado local de UI (modales, selección) ---
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [closingSymbol, setClosingSymbol] = useState<string | null>(null);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
-  const [isConnected, setIsConnected] = useState<boolean>(true);
   const [chartModalVisible, setChartModalVisible] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<PositionInfo | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    const fetchStatus = async () => {
-      try {
-        const data = await getStatus();
-        if (!isMounted) return;
-        setIsConnected(true);
-        setStatus(data);
-        if (data.active_symbols && data.active_symbols.length > 0) {
-          setSelectedSymbol((prev) => {
-            if (!prev || !data.active_symbols.includes(prev)) {
-              return data.active_symbols[0];
-            }
-            return prev;
-          });
-        } else {
-          setSelectedSymbol(null);
-        }
-      } catch (error) {
-        if (isMounted) setIsConnected(false);
-      }
-    };
+  // --- WebSocket global: reemplaza setInterval de polling ---
+  // Un único WS por sesión, con cleanup automático al salir del componente
+  useEngineWebSocket(selectedSymbol);
 
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  // Seleccionar el primer símbolo activo automáticamente
+  const activeSymbols = status?.active_symbols || [];
+  if (activeSymbols.length > 0 && !selectedSymbol) {
+    setSelectedSymbol(activeSymbols[0]);
+  }
 
   const handleToggle = async (value: boolean) => {
     if (value) {
@@ -53,14 +39,16 @@ export default function DashboardScreen() {
       if (success) {
         const response = await startEngine();
         alert(`Start Engine: ${response.message}`);
-        setStatus(prev => prev ? { ...prev, is_running: true } : null);
+        const data = await getStatus();
+        useEngineStore.getState().setStatus(data);
       }
     } else {
       const success = await authenticateBiometrically('Confirmar parada del motor');
       if (success) {
         const response = await stopEngine();
         alert(`Stop Engine: ${response.message}`);
-        setStatus(prev => prev ? { ...prev, is_running: false } : null);
+        const data = await getStatus();
+        useEngineStore.getState().setStatus(data);
       }
     }
   };
@@ -157,26 +145,31 @@ export default function DashboardScreen() {
                 <p className="text-white/50 text-xs">No hay posiciones activas en este momento.</p>
               ) : (
                 status.open_positions.map((pos, idx) => {
+                  const isShort = pos.side.toUpperCase() === 'SHORT' || pos.side.toUpperCase() === 'SELL';
                   const contractSize = pos.contractSize || 1;
-                  const margin = (pos.contracts * contractSize * pos.entryPrice) / pos.leverage;
-                  const roi = margin > 0 ? (pos.unrealizedPnl / margin) * 100 : 0;
-                  const valueUsdt = pos.contracts * contractSize * pos.markPrice;
+                  const currentMarkPrice = pos.markPrice;
+                  const calculatedPnl = isShort
+                    ? (pos.entryPrice - currentMarkPrice) * pos.contracts * contractSize
+                    : (currentMarkPrice - pos.entryPrice) * pos.contracts * contractSize;
+                  const margin = (pos.entryPrice * pos.contracts * contractSize) / pos.leverage;
+                  const roePercent = margin > 0 ? (calculatedPnl / margin) * 100 : 0;
+                  const valueUsdt = pos.contracts * contractSize * currentMarkPrice;
                   
                   return (
                     <div key={idx} className="bg-white/5 p-2 rounded border border-white/5 text-xs flex justify-between items-center">
                       <div>
                         <span className="font-bold text-white">{pos.symbol}</span>
-                        <span className={`ml-2 px-1 rounded text-[9px] ${pos.side.toLowerCase() === 'buy' || pos.side.toLowerCase() === 'long' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
-                          {pos.side.toLowerCase() === 'buy' || pos.side.toLowerCase() === 'long' ? 'LONG' : 'SHORT'} {pos.leverage}x
+                        <span className={`ml-2 px-1 rounded text-[9px] ${!isShort ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
+                          {!isShort ? 'LONG' : 'SHORT'} {pos.leverage}x
                         </span>
-                        <div className="text-white/70 mt-0.5 text-[10px]">
-                          Cant: {pos.contracts} | Total: ${valueUsdt.toFixed(2)} | Inv. Neta: ${margin.toFixed(2)}
+                        <div className="text-white/70 mt-0.5 text-[10px] tabular-nums font-mono">
+                          Cant: {pos.contracts} | Total: ${valueUsdt.toFixed(2)} | Inv: ${margin.toFixed(2)}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-white font-mono">${pos.markPrice.toFixed(7)}</div>
-                        <div className={`font-bold ${roi >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
-                          {roi >= 0 ? '+' : ''}{roi.toFixed(2)}%
+                        <div className="text-white font-mono tabular-nums">${currentMarkPrice.toFixed(7)}</div>
+                        <div className={`font-bold tabular-nums font-mono ${roePercent >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                          {roePercent >= 0 ? '+' : ''}{roePercent.toFixed(2)}%
                         </div>
                       </div>
                     </div>
@@ -215,8 +208,14 @@ export default function DashboardScreen() {
             const position = status.open_positions?.find((p) => p.symbol === symbol);
             const standaloneOrders = status.open_orders?.filter(o => o.symbol === symbol) || [];
             
-            const livePnl = position && position.unrealizedPnl !== undefined 
-              ? position.unrealizedPnl 
+            const isShortPos = position
+              ? (position.side.toUpperCase() === 'SHORT' || position.side.toUpperCase() === 'SELL')
+              : false;
+            const contractSizePos = position?.contractSize || 1;
+            const livePnl = position
+              ? isShortPos
+                ? (position.entryPrice - position.markPrice) * position.contracts * contractSizePos
+                : (position.markPrice - position.entryPrice) * position.contracts * contractSizePos
               : 0;
 
             const handleClosePosition = async (e: React.MouseEvent, sym: string) => {
@@ -225,7 +224,7 @@ export default function DashboardScreen() {
               try {
                 await closePosition(sym);
                 const data = await getStatus();
-                setStatus(data);
+                useEngineStore.getState().setStatus(data);
               } catch (err) {
                 console.error(err);
                 alert('Error cerrando la posición.');
@@ -286,33 +285,30 @@ export default function DashboardScreen() {
                       </div>
                       <p className="text-white/90 text-sm mb-1.5 mt-4">
                         <span className="font-bold text-[#4DA8DA]">PNL:</span>{' '}
-                        <span className={`font-bold text-lg ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                        <span className={`font-bold text-lg tabular-nums font-mono ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
                           {livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT
                         </span>
                       </p>
-                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Lado:</span> {position.side.toLowerCase() === 'buy' || position.side.toLowerCase() === 'long' ? 'LONG' : 'SHORT'}</p>
-                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Entrada:</span> {position.entryPrice}</p>
-                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Actual:</span> {position.markPrice}</p>
+                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Lado:</span> {isShortPos ? 'SHORT 🔴' : 'LONG 🟢'}</p>
+                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Entrada:</span> <span className="tabular-nums font-mono">{position.entryPrice}</span></p>
+                      <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Actual:</span> <span className="tabular-nums font-mono">{position.markPrice}</span></p>
                       <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Apalancamiento:</span> {position.leverage}x</p>
                       
                       {position.orders && position.orders.length > 0 && (
                         <div className="mt-2 border-t border-white/10 pt-2">
                           <p className="font-bold text-[#4DA8DA]">Órdenes Pendientes de Salida:</p>
                           {position.orders.map((ord, idx) => {
-                            let expectedPnL = 0;
-                            const contractSize = position.contractSize || 1;
-                            if (position.side.toLowerCase() === 'long' || position.side.toLowerCase() === 'buy') {
-                              expectedPnL = (ord.price - position.entryPrice) * position.contracts * contractSize;
-                            } else {
-                              expectedPnL = (position.entryPrice - ord.price) * position.contracts * contractSize;
-                            }
+                            const csz = position.contractSize || 1;
+                            const expectedPnL = isShortPos
+                              ? (position.entryPrice - ord.price) * position.contracts * csz
+                              : (ord.price - position.entryPrice) * position.contracts * csz;
                             const isProfit = expectedPnL > 0;
                             
                             return (
                               <p key={idx} className="text-white/90 text-sm mb-1">
-                                • {ord.type}: {ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%) 
+                                • {ord.type}: <span className="tabular-nums font-mono">{ord.price.toFixed(7)}</span> ({ord.distance_pct.toFixed(2)}%)
                                 <span className={isProfit ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
-                                  {' '}[PnL: {expectedPnL > 0 ? '+' : ''}{expectedPnL.toFixed(2)} USDT]
+                                  {' '}[PnL: <span className="tabular-nums font-mono">{expectedPnL > 0 ? '+' : ''}{expectedPnL.toFixed(2)}</span> USDT]
                                 </span>
                               </p>
                             );
@@ -334,14 +330,15 @@ export default function DashboardScreen() {
                           Gráfico
                         </NeoButton>
                       </div>
-                      {status.latest_prices && status.latest_prices[symbol] && (
-                          <div className="mb-4 bg-white/5 p-2.5 rounded-lg flex flex-col items-center">
-                              <p className="text-[#A0A0A0] text-xs mt-2">Precio Actual</p>
-                              <p className="font-bold text-white text-lg mt-1">
-                                  {status.latest_prices[symbol].toFixed(7)}
-                              </p>
-                          </div>
-                      )}
+                      {/* PriceTicker: Componente atómico, solo re-renderiza cuando cambia este símbolo */}
+                      <div className="mb-4 bg-white/5 p-2.5 rounded-lg flex flex-col items-center">
+                          <p className="text-[#A0A0A0] text-xs mt-2">Precio Actual en Vivo</p>
+                          <PriceTicker
+                            symbol={symbol}
+                            decimals={7}
+                            className="font-bold text-lg mt-1"
+                          />
+                      </div>
                       <div className="flex flex-row items-center mb-2 gap-2 mt-2">
                         <p className="font-bold text-[#4DA8DA]">Órdenes de Entrada Abiertas:</p>
                         <NeoBadge
@@ -355,7 +352,7 @@ export default function DashboardScreen() {
                             label={`${ord.side} ${ord.type}`} 
                             variant={ord.side === 'BUY' ? 'success' : 'danger'} 
                           />
-                          <p className="text-white/90 text-sm mb-1 mt-1">Precio: {ord.price.toFixed(7)} | Cant: {ord.amount}</p>
+                          <p className="text-white/90 text-sm mb-1 mt-1 tabular-nums font-mono">Precio: {ord.price.toFixed(7)} | Cant: {ord.amount}</p>
                           <p className="text-white/70 text-xs mt-0.5">
                             Estado: {ord.status === 'pending (simulado)' ? 'Esperando que el precio la toque…' : ord.status}
                           </p>

@@ -2,22 +2,31 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
 import { getStatus, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory, closePosition } from '../services/api';
-import type { SystemStatus, PositionInfo } from '../services/api';
+import type { PositionInfo } from '../services/api';
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+import { useEngineStore } from '../store/useEngineStore';
+import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
+import PriceTicker from '../components/PriceTicker';
 
 export default function ChartScreen() {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const initialSymbol = queryParams.get('symbol');
 
-  const [status, setStatus] = useState<SystemStatus | null>(null);
+  // --- Estado global (Zustand) ---
+  const status = useEngineStore((state) => state.status);
+
+  // --- Estado local de UI ---
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(initialSymbol);
   const [timeframe, setTimeframe] = useState<string>('5m');
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [closingPos, setClosingPos] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
+
+  // --- WebSocket global para el símbolo seleccionado ---
+  useEngineWebSocket(selectedSymbol);
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -27,33 +36,20 @@ export default function ChartScreen() {
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
-      const [data] = await Promise.all([
-        getStatus(),
-        getCredentials()
-      ]);
+      await getCredentials();
       if (!isMounted) return;
-      setStatus(data);
 
-      if (!selectedSymbol) {
-        if (data.active_symbols && data.active_symbols.length > 0) {
-          setSelectedSymbol(data.active_symbols[0]);
-        } else {
-          setSelectedSymbol('BTC/USDT:USDT');
-        }
+      if (!selectedSymbol && status?.active_symbols?.length) {
+        setSelectedSymbol(status.active_symbols[0]);
+      } else if (!selectedSymbol) {
+        setSelectedSymbol('BTC/USDT:USDT');
       }
       setIsLoading(false);
     };
 
     fetchData();
-    const interval = setInterval(async () => {
-      const data = await getStatus();
-      if (isMounted) setStatus(data);
-    }, 5000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [selectedSymbol]);
+    return () => { isMounted = false; };
+  }, [selectedSymbol, status?.active_symbols?.length]);
 
   // Init chart
   useEffect(() => {
@@ -146,8 +142,8 @@ export default function ChartScreen() {
 
         if (currentPosition && currentPosition.entryPrice) {
           const side = currentPosition.side.toLowerCase();
-          const assumedFee = 0.0010; // 0.1% round-trip conservative estimate
           const isLong = side === 'buy' || side === 'long';
+          const assumedFee = 0.0010;
           const bePrice = isLong
             ? currentPosition.entryPrice * (1 + assumedFee)
             : currentPosition.entryPrice * (1 - assumedFee);
@@ -155,15 +151,16 @@ export default function ChartScreen() {
           chartOrders.push({
             price: bePrice,
             type: 'BREAK-EVEN',
-            side: side === 'buy' || side === 'long' ? 'SELL' : 'BUY'
+            side: isLong ? 'SELL' : 'BUY'
           });
         }
 
         if (currentPosition && currentPosition.liquidationPrice) {
+          const isShort = currentPosition.side.toLowerCase() === 'short' || currentPosition.side.toLowerCase() === 'sell';
           chartOrders.push({
             price: currentPosition.liquidationPrice,
             type: 'LIQUIDATION',
-            side: 'SELL' // Color se define luego
+            side: isShort ? 'BUY' : 'SELL'
           });
         }
 
@@ -237,8 +234,15 @@ export default function ChartScreen() {
 
 
 
-  const livePnl = activePosition && activePosition.unrealizedPnl !== undefined
-    ? activePosition.unrealizedPnl
+  const isShortActive = activePosition
+    ? (activePosition.side.toUpperCase() === 'SHORT' || activePosition.side.toUpperCase() === 'SELL')
+    : false;
+  const contractSizeActive = activePosition?.contractSize || 1;
+
+  const livePnl = activePosition
+    ? isShortActive
+      ? (activePosition.entryPrice - activePosition.markPrice) * activePosition.contracts * contractSizeActive
+      : (activePosition.markPrice - activePosition.entryPrice) * activePosition.contracts * contractSizeActive
     : 0;
 
   const handleClosePosition = async () => {
@@ -247,7 +251,7 @@ export default function ChartScreen() {
     try {
       await closePosition(activePosition.symbol);
       const data = await getStatus();
-      setStatus(data);
+      useEngineStore.getState().setStatus(data);
     } catch (e) {
       console.error(e);
       alert('Error cerrando la posición.');
@@ -313,15 +317,10 @@ export default function ChartScreen() {
                         {closingPos ? 'Cerrando...' : 'Cerrar'}
                       </NeoButton>
                     </div>
-                    <p className="text-white/90 text-sm mb-1.5">
-                      <span className="font-bold text-[#34d8ff]">PNL:</span>{' '}
-                      <span className={`font-bold text-lg ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
-                        {livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT
-                      </span>
-                    </p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Lado:</span> {activePosition.side.toLowerCase() === 'buy' || activePosition.side.toLowerCase() === 'long' ? 'LONG' : 'SHORT'}</p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Entrada:</span> {activePosition.entryPrice}</p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Actual:</span> {activePosition.markPrice}</p>
+                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">PNL:</span>{' '}<span className={`font-bold tabular-nums font-mono ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>{livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT</span></p>
+                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Lado:</span> {isShortActive ? 'SHORT 🔴' : 'LONG 🟢'}</p>
+                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Entrada:</span> <span className="tabular-nums font-mono">{activePosition.entryPrice}</span></p>
+                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Actual:</span> <span className="tabular-nums font-mono">{activePosition.markPrice}</span></p>
                     <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Apalancamiento:</span> {activePosition.leverage}x</p>
                     <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Contratos:</span> {activePosition.contracts}</p>
                     {activePosition.confidence !== undefined && (
@@ -339,7 +338,7 @@ export default function ChartScreen() {
                               label={ord.type}
                               variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'}
                             />
-                            <span className="text-white/90 text-sm">{ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)</span>
+                            <span className="text-white/90 text-sm tabular-nums font-mono">{ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)</span>
                           </div>
                         ))}
                       </div>
