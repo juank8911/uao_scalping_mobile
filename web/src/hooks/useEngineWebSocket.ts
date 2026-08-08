@@ -1,145 +1,197 @@
 /**
  * useEngineWebSocket.ts
- * Hook global que gestiona el ciclo de vida completo del WebSocket
- * con el engine de trading. Inyecta datos directamente en Zustand,
- * eliminando el polling de setInterval en Dashboard y Chart.
- * 
- * Arquitectura HFT:
- * - Reemplaza el setInterval de getStatus() por eventos de push del servidor
- * - Cada tick de precio actualiza solo state.latestPrices[symbol] → solo
- *   el componente PriceTicker suscrito a ese símbolo re-renderiza
- * - El estado global (posiciones, órdenes) se actualiza por evento del servidor
- * - Reconexión automática con backoff exponencial en caso de corte
+ *
+ * SINGLETON PERSISTENTE — Una sola conexión WS durante toda la sesión.
+ *
+ * Problemas anteriores resueltos:
+ *  1. Dashboard y Chart llamaban al hook por separado → 2 sockets simultáneos
+ *     que se destruían/recreaban al navegar entre páginas.
+ *  2. La dependencia en [activeSymbol] destruía y recreaba el socket al cambiar
+ *     símbolo, en lugar de solo enviar un nuevo "subscribe".
+ *  3. Sin heartbeat, el proxy de Vite (y Nginx en producción) cerraba la
+ *     conexión por inactividad → "socket hang up".
+ *
+ * Arquitectura nueva:
+ *  - `useEngineWebSocketInit()` → llamar UNA VEZ desde PrivateRoute/App.
+ *    Crea el socket global, arranca heartbeat y fallback REST.
+ *  - `useEngineWebSocket(symbol)` → llamar desde páginas.
+ *    Solo actualiza la suscripción de símbolo sin tocar el socket.
  */
 import { useEffect, useRef } from 'react';
 import { useEngineStore } from '../store/useEngineStore';
 import { getStatus } from '../services/api';
 
-const WS_RECONNECT_DELAY_MS = 3000;
-const STATUS_POLL_FALLBACK_MS = 8000; // Fallback si el WS no envía status completo
+// ─── Constantes ───────────────────────────────────────────────────────────────
+const HEARTBEAT_MS = 25_000;          // ping cada 25s (keepalive ante proxies)
+const FALLBACK_POLL_MS = 10_000;      // REST fallback cada 10s
+const MAX_RECONNECT_DELAY_MS = 30_000; // techo del backoff exponencial
 
-export const useEngineWebSocket = (activeSymbol?: string | null) => {
-  const ws = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fallbackTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { setStatus, setConnected, updatePrice } = useEngineStore.getState();
+// ─── Estado singleton (fuera de React) ───────────────────────────────────────
+let globalWs: WebSocket | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let fallbackTimer: ReturnType<typeof setInterval> | null = null;
+let reconnectDelay = 1_000;
+let intentionallyClosed = false;
+let activeSymbolGlobal: string | null = null;
 
+// ─── Helpers internos ─────────────────────────────────────────────────────────
+function getWsUrl(): string {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host =
+    window.location.hostname === 'localhost'
+      ? 'localhost:8000'
+      : window.location.host;
+  return `${protocol}//${host}/api/v1/ws/notifications`;
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+function startHeartbeat(ws: WebSocket) {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ action: 'ping' })); } catch { /* ignorar */ }
+    }
+  }, HEARTBEAT_MS);
+}
+
+function store() { return useEngineStore.getState(); }
+
+// ─── Conexión singleton ───────────────────────────────────────────────────────
+function connectSingleton() {
+  if (intentionallyClosed) return;
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+
+  // No abrir si ya hay conexión activa/en progreso
+  if (
+    globalWs &&
+    (globalWs.readyState === WebSocket.OPEN ||
+      globalWs.readyState === WebSocket.CONNECTING)
+  ) return;
+
+  console.log(`🔌 [WS] Conectando a ${getWsUrl()}…`);
+  const ws = new WebSocket(getWsUrl());
+  globalWs = ws;
+
+  ws.onopen = () => {
+    console.log('🔗 [WS] Conexión establecida.');
+    reconnectDelay = 1_000; // reset backoff
+    store().setConnected(true);
+    startHeartbeat(ws);
+    if (activeSymbolGlobal) {
+      ws.send(JSON.stringify({ action: 'subscribe', symbol: activeSymbolGlobal }));
+    }
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const payload = JSON.parse(event.data);
+
+      // Emitir evento global para que otros hooks (ej. useTelegramNotifications)
+      // puedan reaccionar sin abrir su propio socket
+      window.dispatchEvent(new CustomEvent('ws:message', { detail: payload }));
+
+      const { event: evtType, symbol, data } = payload;
+      const { setStatus, updatePrice } = store();
+
+      switch (evtType) {
+        case 'pong': break; // respuesta al heartbeat
+        case 'ticker_update':
+          if (symbol && data?.price != null) updatePrice(symbol, parseFloat(data.price));
+          else if (symbol && data?.last != null) updatePrice(symbol, parseFloat(data.last));
+          break;
+        case 'status_update':
+          if (data) setStatus(data);
+          break;
+        case 'trade_closed':
+        case 'position_opened':
+        case 'position_closed':
+          getStatus().then((s) => store().setStatus(s)).catch(() => {});
+          break;
+        default: break;
+      }
+    } catch { /* ignorar mensajes malformados */ }
+  };
+
+  ws.onclose = (event) => {
+    stopHeartbeat();
+    globalWs = null;
+
+    if (intentionallyClosed) {
+      store().setConnected(false);
+      console.log('🔴 [WS] Cerrado intencionalmente.');
+      return;
+    }
+
+    store().setConnected(false);
+    console.warn(`🔴 [WS] Desconectado (code=${event.code}). Reconectando en ${reconnectDelay / 1000}s…`);
+    reconnectTimer = setTimeout(connectSingleton, reconnectDelay);
+    reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+  };
+
+  ws.onerror = (err) => {
+    console.error('[WS] Error:', err);
+    ws.close(); // onclose se encarga de la reconexión
+  };
+}
+
+function disconnectSingleton() {
+  intentionallyClosed = true;
+  stopHeartbeat();
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+  if (globalWs) { globalWs.onclose = null; globalWs.close(); globalWs = null; }
+  if (fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null; }
+  store().setConnected(false);
+}
+
+// ─── Hook de inicialización (llamar UNA SOLA VEZ desde PrivateRoute / App) ───
+export const useEngineWebSocketInit = () => {
   useEffect(() => {
-    let isMounted = true;
+    intentionallyClosed = false;
 
-    // --- Carga inicial via REST (snapshot rápido antes de que conecte el WS) ---
-    getStatus().then((data) => {
-      if (isMounted) setStatus(data);
-    });
+    // Snapshot REST inmediato
+    getStatus().then((data) => store().setStatus(data)).catch(() => {});
 
-    // --- Fallback polling para el estado completo (posiciones, órdenes) ---
-    // El WS envía ticks de precio, pero el status completo lo obtenemos
-    // via REST como respaldo cada 8s para garantizar consistencia.
-    fallbackTimer.current = setInterval(async () => {
-      if (!isMounted) return;
-      try {
-        const data = await getStatus();
-        if (isMounted) setStatus(data);
-      } catch (e) {
-        console.warn('[EngineWS] Fallback REST falló:', e);
-      }
-    }, STATUS_POLL_FALLBACK_MS);
+    // Fallback polling REST
+    if (!fallbackTimer) {
+      fallbackTimer = setInterval(async () => {
+        try { store().setStatus(await getStatus()); } catch { /* silencio */ }
+      }, FALLBACK_POLL_MS);
+    }
 
-    const connect = () => {
-      if (!isMounted) return;
+    connectSingleton();
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
-      const wsUrl = `${protocol}//${host}/api/v1/ws/notifications`;
-
-      ws.current = new WebSocket(wsUrl);
-
-      ws.current.onopen = () => {
-        if (!isMounted) return;
-        setConnected(true);
-        console.log('🔗 [EngineWS] Conectado al WebSocket del motor.');
-
-        // Suscripción al símbolo activo si hay uno
-        if (activeSymbol) {
-          ws.current?.send(JSON.stringify({ action: 'subscribe', symbol: activeSymbol }));
-          console.log(`[EngineWS] Suscrito a ticks de: ${activeSymbol}`);
-        }
-      };
-
-      ws.current.onmessage = (event) => {
-        if (!isMounted) return;
-        try {
-          const payload = JSON.parse(event.data);
-          const { event: evtType, symbol, data } = payload;
-
-          switch (evtType) {
-            // Tick de precio en tiempo real → actualizar solo ese símbolo
-            case 'ticker_update':
-              if (symbol && data?.price != null) {
-                updatePrice(symbol, parseFloat(data.price));
-              } else if (symbol && data?.last != null) {
-                updatePrice(symbol, parseFloat(data.last));
-              }
-              break;
-
-            // El motor emite el status completo cuando hay un cambio de estado
-            case 'status_update':
-              if (data) setStatus(data);
-              break;
-
-            // Notificación de trade cerrado → forzar refresh del status
-            case 'trade_closed':
-            case 'position_opened':
-            case 'position_closed':
-              getStatus().then((s) => { if (isMounted) setStatus(s); });
-              break;
-
-            default:
-              // Ignorar eventos desconocidos silenciosamente
-              break;
-          }
-        } catch (e) {
-          // Ignorar mensajes malformados
-        }
-      };
-
-      ws.current.onclose = () => {
-        if (!isMounted) return;
-        setConnected(false);
-        console.log(`🔴 [EngineWS] Desconectado. Reconectando en ${WS_RECONNECT_DELAY_MS / 1000}s...`);
-        reconnectTimer.current = setTimeout(connect, WS_RECONNECT_DELAY_MS);
-      };
-
-      ws.current.onerror = (err) => {
-        console.error('[EngineWS] Error:', err);
-        ws.current?.close();
-      };
-    };
-
-    connect();
-
-    // --- CLEANUP: Vital para evitar fugas de memoria al cambiar de ruta ---
     return () => {
-      isMounted = false;
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      if (fallbackTimer.current) clearInterval(fallbackTimer.current);
-      if (ws.current) {
-        ws.current.onclose = null; // Evitar reconexión al hacer cleanup intencional
-        ws.current.close();
-        ws.current = null;
-      }
-      setConnected(false);
+      // Solo desconectar al hacer logout / desmontar la raíz privada
+      disconnectSingleton();
     };
-  }, [activeSymbol]); // Se reconecta y re-suscribe si cambia el símbolo activo
+  }, []); // sin dependencias → se monta una sola vez
 };
 
-/**
- * Suscribe un símbolo al WebSocket activo para recibir sus ticks.
- * Útil cuando el usuario cambia de símbolo en Chart.tsx.
- */
+// ─── Hook para páginas — solo actualiza la suscripción de símbolo ─────────────
+export const useEngineWebSocket = (activeSymbol?: string | null) => {
+  const prevSymbol = useRef<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (activeSymbol === prevSymbol.current) return;
+    prevSymbol.current = activeSymbol;
+    if (!activeSymbol) return;
+
+    activeSymbolGlobal = activeSymbol;
+
+    // Suscribir inmediatamente si el socket ya está abierto
+    if (globalWs && globalWs.readyState === WebSocket.OPEN) {
+      globalWs.send(JSON.stringify({ action: 'subscribe', symbol: activeSymbol }));
+      console.log(`[WS] Suscrito a: ${activeSymbol}`);
+    }
+    // Si no está abierto, onopen re-suscribirá usando activeSymbolGlobal
+  }, [activeSymbol]);
+};
+
+/** @deprecated Usar useEngineWebSocket desde páginas */
 export const subscribeToSymbol = (symbol: string) => {
-  // Esta función se llama desde componentes que tienen acceso al store
-  // pero no directamente al ref del WS. El hook se encarga de la suscripción
-  // inicial via el parámetro activeSymbol.
-  console.log(`[EngineWS] Solicitud de suscripción a: ${symbol}`);
+  console.log(`[WS] subscribeToSymbol: ${symbol}`);
 };

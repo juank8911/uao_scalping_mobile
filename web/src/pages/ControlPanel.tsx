@@ -86,6 +86,7 @@ export default function ControlPanelScreen() {
       try {
         const res = await resetPaperBalance();
         alert(`Éxito: ${res.message}`);
+        window.location.reload();
       } catch (err) {
         alert('Error al reiniciar Paper Trading');
       }
@@ -182,11 +183,9 @@ export default function ControlPanelScreen() {
                   <NeoButton variant="outline" size="md" onClick={() => setIsEditing(true)}>
                     Editar Configuración
                   </NeoButton>
-                  {executionMode === 'PAPER_TRADING' && (
-                    <NeoButton variant="secondary" size="md" onClick={handleResetPaper}>
-                      Reiniciar Paper Trading
-                    </NeoButton>
-                  )}
+                  <NeoButton variant="secondary" size="md" onClick={handleResetPaper}>
+                    Reiniciar Paper Trading e Historial
+                  </NeoButton>
                 </div>
               </div>
             )}

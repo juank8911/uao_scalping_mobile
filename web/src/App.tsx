@@ -15,9 +15,11 @@ import { RightSidebarNavigation } from './components/RightSidebarNavigation';
 import { LeftHistoryPanel } from './components/LeftHistoryPanel';
 import { TradeNotifications } from './components/TradeNotifications';
 import { useTelegramNotifications } from './hooks/useTelegramNotifications';
+import { useEngineWebSocketInit } from './hooks/useEngineWebSocket';
 
 const PrivateRoute = () => {
   useTelegramNotifications();
+  useEngineWebSocketInit(); // WebSocket singleton — persiste durante toda la sesión
   const navigate = useNavigate();
 
   useEffect(() => {
