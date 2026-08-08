@@ -167,7 +167,7 @@ export default function DashboardScreen() {
                       <div>
                         <span className="font-bold text-white">{pos.symbol}</span>
                         <span className={`ml-2 px-1 rounded text-[9px] ${pos.side.toLowerCase() === 'buy' || pos.side.toLowerCase() === 'long' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
-                          {pos.side.toUpperCase()} {pos.leverage}x
+                          {pos.side.toLowerCase() === 'buy' || pos.side.toLowerCase() === 'long' ? 'LONG' : 'SHORT'} {pos.leverage}x
                         </span>
                         <div className="text-white/70 mt-0.5 text-[10px]">
                           Cant: {pos.contracts} | Total: ${valueUsdt.toFixed(2)} | Inv. Neta: ${margin.toFixed(2)}
