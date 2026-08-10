@@ -123,16 +123,39 @@ export default function ChartScreen() {
         setHistory(historyData);
 
         const currentPosition = status?.open_positions?.find(p => p.symbol === selectedSymbol);
-        const currentOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
+        const standaloneOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
+        const activePosition = currentPosition;
 
         const rawChartOrders = [
-          ...currentOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
-          ...(currentPosition?.orders || []).map(o => ({
-            price: o.price,
-            type: o.type,
-            side: currentPosition?.side === 'long' ? 'SELL' : 'BUY'
-          }))
+          ...standaloneOrders,
+          ...(activePosition ? [activePosition] : [])
         ];
+
+        // --- Suscribirse al WebSocket para actualizar la vela en vivo ---
+        const handleWsMessage = (e: CustomEvent) => {
+          const { event, symbol, data: wsData } = e.detail;
+          if (event === 'ticker_update' && symbol === selectedSymbol) {
+            const currentPrice = parseFloat(wsData.last || wsData.price);
+            if (!isNaN(currentPrice)) {
+              const latestCandle = data[data.length - 1];
+              if (latestCandle) {
+                const updatedCandle = {
+                  time: latestCandle.time,
+                  open: latestCandle.open,
+                  high: Math.max(latestCandle.high as number, currentPrice),
+                  low: Math.min(latestCandle.low as number, currentPrice),
+                  close: currentPrice
+                };
+                candlestickSeriesRef.current?.update(updatedCandle);
+                // Actualizar la memoria local para el siguiente tick
+                latestCandle.high = updatedCandle.high;
+                latestCandle.low = updatedCandle.low;
+                latestCandle.close = updatedCandle.close;
+              }
+            }
+          }
+        };
+        window.addEventListener('ws:message', handleWsMessage as EventListener);
 
         const chartOrders = rawChartOrders.filter((value, index, self) =>
           index === self.findIndex((t) => (
@@ -223,9 +246,20 @@ export default function ChartScreen() {
       } catch (err) {
         console.error("Error updating chart:", err);
       }
+      
+      // Cleanup cleanup function
+      return () => {
+        window.removeEventListener('ws:message', handleWsMessage as EventListener);
+      };
     };
 
-    updateChart();
+    const cleanupWs = updateChart();
+
+    return () => {
+      cleanupWs.then(cleanupFn => {
+        if (typeof cleanupFn === 'function') cleanupFn();
+      });
+    };
   }, [selectedSymbol, status, timeframe]);
 
   const activePosition: PositionInfo | undefined = status?.open_positions?.find(

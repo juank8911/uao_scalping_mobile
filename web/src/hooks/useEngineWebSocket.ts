@@ -177,6 +177,13 @@ export const useEngineWebSocket = (activeSymbol?: string | null) => {
 
   useEffect(() => {
     if (activeSymbol === prevSymbol.current) return;
+    
+    // Desuscribirse del símbolo anterior si existe
+    if (prevSymbol.current && globalWs && globalWs.readyState === WebSocket.OPEN) {
+      globalWs.send(JSON.stringify({ action: 'unsubscribe', symbol: prevSymbol.current }));
+      console.log(`[WS] Desuscrito de: ${prevSymbol.current}`);
+    }
+
     prevSymbol.current = activeSymbol;
     if (!activeSymbol) return;
 
