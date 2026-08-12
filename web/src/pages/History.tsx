@@ -23,13 +23,13 @@ export default function HistoryScreen() {
   }, []);
 
   const totalOrders = history.length;
-  const tpOrders = history.filter(t => t.pnl > 0);
-  const slOrders = history.filter(t => t.pnl <= 0);
+  const tpOrders = history.filter(t => t.pnl != null && t.pnl > 0);
+  const slOrders = history.filter(t => t.pnl != null && t.pnl <= 0);
   
   const tpCount = tpOrders.length;
   const slCount = slOrders.length;
-  const totalTpUsdt = tpOrders.reduce((sum, t) => sum + t.pnl, 0);
-  const totalSlUsdt = slOrders.reduce((sum, t) => sum + t.pnl, 0);
+  const totalTpUsdt = tpOrders.reduce((sum, t) => sum + (t.pnl || 0), 0);
+  const totalSlUsdt = slOrders.reduce((sum, t) => sum + (t.pnl || 0), 0);
 
   return (
     <NeoLayout>
@@ -91,8 +91,8 @@ export default function HistoryScreen() {
                       label={trade.side === 'LONG' || trade.side === 'BUY' || trade.side === 'buy' ? 'LONG' : 'SHORT'}
                       variant={trade.side === 'LONG' || trade.side === 'BUY' || trade.side === 'buy' ? 'success' : 'danger'}
                     />
-                    <div className={`font-bold text-lg ${trade.pnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
-                      PNL: {trade.pnl > 0 ? '+' : ''}{trade.pnl.toFixed(2)} USDT
+                    <div className={`font-bold text-lg ${(trade.pnl ?? 0) >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                      PNL: {(trade.pnl ?? 0) > 0 ? '+' : ''}{(trade.pnl ?? 0).toFixed(2)} USDT
                     </div>
                   </div>
                   
