@@ -5,12 +5,17 @@ import MainDrawer from './MainDrawer';
 import { getToken } from '../utils/auth';
 import { View, ActivityIndicator } from 'react-native';
 import { NeoLayout } from 'jeikei-design-system/native';
+import { useEngineWebSocketInit } from '../hooks/useEngineWebSocket';
+import { TradeNotifications } from '../components/TradeNotifications';
 
 const Stack = createNativeStackNavigator();
 
 export default function AppNavigator() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Initialize global websocket connection (only happens once)
+  useEngineWebSocketInit();
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -42,12 +47,15 @@ export default function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator
-      initialRouteName={isAuthenticated ? 'MainDrawer' : 'Login'}
-      screenOptions={{ headerShown: false }}
-    >
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="MainDrawer" component={MainDrawer} />
-    </Stack.Navigator>
+    <>
+      <Stack.Navigator
+        initialRouteName={isAuthenticated ? 'MainDrawer' : 'Login'}
+        screenOptions={{ headerShown: false }}
+      >
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="MainDrawer" component={MainDrawer} />
+      </Stack.Navigator>
+      <TradeNotifications />
+    </>
   );
 }

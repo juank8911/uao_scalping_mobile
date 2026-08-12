@@ -5,9 +5,12 @@ import { NeoModal } from '../components/NeoModal';
 import { getStatus, SystemStatus, startEngine, stopEngine, PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 import { PositionChartModal } from '../components/PositionChartModal';
+import { PriceTicker } from '../components/PriceTicker';
+import { useEngineStatus, useEngineStore } from '../store/useEngineStore';
 
 export default function DashboardScreen() {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const globalStatus = useEngineStatus();
+  const setGlobalStatus = useEngineStore(state => state.setStatus);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isConnected, setIsConnected] = useState<boolean>(true);
@@ -19,7 +22,7 @@ export default function DashboardScreen() {
       try {
         const data = await getStatus();
         setIsConnected(true);
-        setStatus(data);
+        setGlobalStatus(data);
         if (data.active_symbols && data.active_symbols.length > 0) {
           setSelectedSymbol((prev) => {
             if (!prev || !data.active_symbols.includes(prev)) {
@@ -36,9 +39,7 @@ export default function DashboardScreen() {
     };
 
     fetchStatus();
-    // Poll every 5 seconds
-    const interval = setInterval(fetchStatus, 5000);
-    return () => clearInterval(interval);
+    // Polling removed in favor of WebSocket + Zustand
   }, []);
 
   const handleToggle = async (value: boolean) => {
@@ -49,7 +50,7 @@ export default function DashboardScreen() {
         const response = await startEngine();
         Alert.alert('Start Engine', response.message);
         // Optimistic update
-        setStatus(prev => prev ? { ...prev, is_running: true } : null);
+        setGlobalStatus(globalStatus ? { ...globalStatus, is_running: true } : null as any);
       }
     } else {
       const success = await authenticateBiometrically('Confirmar parada del motor');
@@ -57,10 +58,12 @@ export default function DashboardScreen() {
         const response = await stopEngine();
         Alert.alert('Stop Engine', response.message);
         // Optimistic update
-        setStatus(prev => prev ? { ...prev, is_running: false } : null);
+        setGlobalStatus(globalStatus ? { ...globalStatus, is_running: false } : null as any);
       }
     }
   };
+
+  const status = globalStatus;
 
   return (
     <NeoLayout>
@@ -150,7 +153,7 @@ export default function DashboardScreen() {
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.positionPrice}>${pos.markPrice.toFixed(7)}</Text>
+                      <PriceTicker symbol={pos.symbol} style={styles.positionPrice} />
                       <Text style={[styles.positionRoi, { color: roi >= 0 ? '#00ff88' : '#ff3366' }]}>
                         {roi >= 0 ? '+' : ''}{roi.toFixed(2)}%
                       </Text>

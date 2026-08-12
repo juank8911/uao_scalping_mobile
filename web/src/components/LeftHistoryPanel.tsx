@@ -81,9 +81,9 @@ export const LeftHistoryPanel: React.FC = () => {
                       {trade.sl_price ? `SL: ${trade.sl_price}` : ''}
                     </p>
                   </div>
-                  <div className={`flex items-center gap-1 font-bold text-sm ${trade.pnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
-                    {trade.pnl >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                    {trade.pnl > 0 ? '+' : ''}{trade.pnl.toFixed(2)}
+                  <div className={`flex items-center gap-1 font-bold text-sm ${(trade.pnl || 0) >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                    {(trade.pnl || 0) >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                    {(trade.pnl || 0) > 0 ? '+' : ''}{(trade.pnl || 0).toFixed(2)}
                   </div>
                 </div>
               </div>

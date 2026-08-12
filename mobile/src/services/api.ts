@@ -1,7 +1,7 @@
 import { getToken, deleteToken, saveToken } from '../utils/auth';
 import { resetToLogin } from '../navigation/navigationRef';
 
-const API_BASE_URL = 'http://192.168.0.9:8000/api/v1';
+export const API_BASE_URL = 'http://192.168.0.9:8000/api/v1';
 const BASE_URL = `${API_BASE_URL}/control`;
 
 // Órdenes TP/SL "adjuntas" a una posición ya abierta (PositionInfo.orders)

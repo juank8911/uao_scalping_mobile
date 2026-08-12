@@ -93,6 +93,25 @@ export default function ChartScreen() {
           precision: 7,
           minMove: 0.0000001,
         },
+        autoscaleInfoProvider: (original) => {
+          const res = original();
+          if (res && res.priceRange) {
+            let minPrice = res.priceRange.minValue;
+            let maxPrice = res.priceRange.maxValue;
+            if (currentLinesRef.current && currentLinesRef.current.length > 0) {
+              currentLinesRef.current.forEach(item => {
+                if (item && item.price) {
+                  if (item.price < minPrice) minPrice = item.price;
+                  if (item.price > maxPrice) maxPrice = item.price;
+                }
+              });
+              // Add a small margin
+              const margin = (maxPrice - minPrice) * 0.05;
+              res.priceRange = { minValue: minPrice - margin, maxValue: maxPrice + margin };
+            }
+          }
+          return res;
+        }
       });
 
       candlestickSeriesRef.current = candlestickSeries;
@@ -108,31 +127,26 @@ export default function ChartScreen() {
     }
   }, [selectedSymbol]); // Re-init chart on symbol change to clear everything
 
-  // Fetch and update data
+  // Fetch and update base data
   useEffect(() => {
     let isMounted = true;
     if (!selectedSymbol || !candlestickSeriesRef.current || !chartRef.current) return;
 
-    const updateChart = async () => {
+    let handleWsMessage: ((e: CustomEvent) => void) | null = null;
+    const loadBaseData = async () => {
       try {
         const data = await fetchChartData(selectedSymbol, timeframe);
-        const trades = await fetchChartTrades(selectedSymbol);
         const historyData = await fetchChartHistory(selectedSymbol);
 
         if (!isMounted) return;
         setHistory(historyData);
 
-        const currentPosition = status?.open_positions?.find(p => p.symbol === selectedSymbol);
-        const standaloneOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
-        const activePosition = currentPosition;
+        const series = candlestickSeriesRef.current;
+        if (series && data && data.length > 0) {
+          series.setData(data);
+        }
 
-        const rawChartOrders = [
-          ...standaloneOrders,
-          ...(activePosition ? [activePosition] : [])
-        ];
-
-        // --- Suscribirse al WebSocket para actualizar la vela en vivo ---
-        const handleWsMessage = (e: CustomEvent) => {
+        handleWsMessage = (e: CustomEvent) => {
           const { event, symbol, data: wsData } = e.detail;
           if (event === 'ticker_update' && symbol === selectedSymbol) {
             const currentPrice = parseFloat(wsData.last || wsData.price);
@@ -147,15 +161,87 @@ export default function ChartScreen() {
                   close: currentPrice
                 };
                 candlestickSeriesRef.current?.update(updatedCandle);
-                // Actualizar la memoria local para el siguiente tick
                 latestCandle.high = updatedCandle.high;
                 latestCandle.low = updatedCandle.low;
                 latestCandle.close = updatedCandle.close;
               }
+              
+              currentLinesRef.current.forEach(item => {
+                if (item && (item.type === 'TAKE_PROFIT' || item.type === 'STOP_LOSS') && item.line) {
+                  const distancePct = Math.abs((item.price - currentPrice) / currentPrice) * 100;
+                  item.line.applyOptions({
+                    title: `${distancePct.toFixed(2)}%`
+                  });
+                }
+              });
             }
           }
         };
         window.addEventListener('ws:message', handleWsMessage as EventListener);
+      } catch (err) {
+        console.error("Error loading base chart data:", err);
+      }
+    };
+
+    loadBaseData();
+
+    return () => {
+      isMounted = false;
+      if (handleWsMessage) {
+        window.removeEventListener('ws:message', handleWsMessage as EventListener);
+      }
+    };
+  }, [selectedSymbol, timeframe]);
+
+  // Handle overlays (trades, lines) independently
+  useEffect(() => {
+    let isMounted = true;
+    if (!selectedSymbol || !candlestickSeriesRef.current) return;
+
+    const updateOverlays = async () => {
+      try {
+        const trades = await fetchChartTrades(selectedSymbol);
+        if (!isMounted) return;
+
+        const series = candlestickSeriesRef.current;
+        if (!series) return;
+
+        series.setMarkers([]);
+        if (trades && trades.length > 0) {
+          const markers = trades.map((t: any) => ({
+            time: t.time,
+            position: t.side === 'buy' ? 'belowBar' : 'aboveBar',
+            color: t.side === 'buy' ? '#4ade80' : '#f87171',
+            shape: t.side === 'buy' ? 'arrowUp' : 'arrowDown',
+            text: t.side === 'buy' ? 'B' : 'S'
+          }));
+          markers.sort((a: any, b: any) => a.time - b.time);
+
+          const uniqueMarkers: any[] = [];
+          let lastTime = 0;
+          for (let m of markers) {
+            if (m.time !== lastTime) {
+              uniqueMarkers.push(m);
+              lastTime = m.time;
+            }
+          }
+          if (uniqueMarkers.length > 0) {
+            series.setMarkers(uniqueMarkers);
+          }
+        }
+
+        const currentPosition = status?.open_positions?.find(p => p.symbol === selectedSymbol);
+        const standaloneOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
+        const activePosition = currentPosition;
+
+        const rawChartOrders: any[] = [
+          ...standaloneOrders,
+          ...(activePosition ? [{
+            ...activePosition,
+            price: activePosition.entryPrice,
+            type: 'POSITION'
+          }] : [])
+        ];
 
         const chartOrders = rawChartOrders.filter((value, index, self) =>
           index === self.findIndex((t) => (
@@ -187,80 +273,50 @@ export default function ChartScreen() {
           });
         }
 
-        const series = candlestickSeriesRef.current;
-        if (!series) return;
-
-        // Limpiar markers
-        series.setMarkers([]);
-
-        // Limpiar price lines
-        currentLinesRef.current.forEach(line => series.removePriceLine(line));
+        currentLinesRef.current.forEach(item => series.removePriceLine(item.line || item));
         currentLinesRef.current = [];
-
-        if (data && data.length > 0) {
-          series.setData(data);
-        }
-
-        if (trades && trades.length > 0) {
-          const markers = trades.map((t: any) => ({
-            time: t.time,
-            position: t.side === 'buy' ? 'belowBar' : 'aboveBar',
-            color: t.side === 'buy' ? '#4ade80' : '#f87171',
-            shape: t.side === 'buy' ? 'arrowUp' : 'arrowDown',
-            text: t.side === 'buy' ? 'B' : 'S'
-          }));
-          markers.sort((a: any, b: any) => a.time - b.time);
-
-          const uniqueMarkers: any[] = [];
-          let lastTime = 0;
-          for (let m of markers) {
-            if (m.time !== lastTime) {
-              uniqueMarkers.push(m);
-              lastTime = m.time;
-            }
-          }
-          if (uniqueMarkers.length > 0) {
-            series.setMarkers(uniqueMarkers);
-          }
-        }
 
         if (chartOrders) {
           chartOrders.forEach(ord => {
             let lineColor = ord.side === 'BUY' ? '#4ade80' : '#f87171';
-            if (ord.type === 'TAKE_PROFIT') lineColor = '#4ade80';
-            if (ord.type === 'STOP_LOSS') lineColor = '#f87171';
-            if (ord.type === 'BREAK-EVEN') lineColor = '#fbbf24'; // amber-400
-            if (ord.type === 'LIQUIDATION') lineColor = '#a855f7'; // purple-500
+            let titleText = ord.type;
+            let style = 2; // 2 = Dashed
+            let labelVisible = true;
+
+            if (ord.type === 'TAKE_PROFIT') { lineColor = '#4ade80'; titleText = 'TP'; }
+            if (ord.type === 'STOP_LOSS') { lineColor = '#f87171'; titleText = 'SL'; }
+            if (ord.type === 'BREAK-EVEN') { lineColor = '#fbbf24'; titleText = 'B_E'; }
+            if (ord.type === 'LIQUIDATION') { lineColor = '#a855f7'; titleText = 'LIQ'; }
+            if (ord.type === 'POSITION') { titleText = ''; style = 0; lineColor = '#6b7280'; labelVisible = false; }
 
             const line = series.createPriceLine({
               price: ord.price,
               color: lineColor,
               lineWidth: 2,
-              lineStyle: 2, // Dashed
-              axisLabelVisible: true,
-              title: ord.type,
+              lineStyle: style,
+              axisLabelVisible: labelVisible,
+              title: titleText,
             });
-            currentLinesRef.current.push(line);
+            currentLinesRef.current.push({
+              line,
+              type: ord.type,
+              price: ord.price,
+              baseTitleText: titleText
+            });
           });
         }
+
       } catch (err) {
-        console.error("Error updating chart:", err);
+        console.error("Error updating chart overlays:", err);
       }
-      
-      // Cleanup cleanup function
-      return () => {
-        window.removeEventListener('ws:message', handleWsMessage as EventListener);
-      };
     };
 
-    const cleanupWs = updateChart();
+    updateOverlays();
 
     return () => {
-      cleanupWs.then(cleanupFn => {
-        if (typeof cleanupFn === 'function') cleanupFn();
-      });
+      isMounted = false;
     };
-  }, [selectedSymbol, status, timeframe]);
+  }, [selectedSymbol, status]);
 
   const activePosition: PositionInfo | undefined = status?.open_positions?.find(
     (p) => p.symbol === selectedSymbol
@@ -335,6 +391,18 @@ export default function ChartScreen() {
             />
 
             <div className="flex-1 p-6 overflow-y-auto">
+              {(() => {
+                const isShort = activePosition?.side?.toLowerCase() === 'short';
+                const calculateExpectedPnl = (targetPrice: number) => {
+                  if (!activePosition) return 0;
+                  return (activePosition.contracts || 0) * (
+                    isShort
+                      ? (activePosition.entryPrice - targetPrice)
+                      : (targetPrice - activePosition.entryPrice)
+                  );
+                };
+                return (
+                  <>
               <NeoCard
                 title="Estado de Operación"
                 value={activePosition ? 'POSICIÓN ABIERTA' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'ESPERANDO SEÑAL')}
@@ -372,7 +440,13 @@ export default function ChartScreen() {
                               label={ord.type}
                               variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'}
                             />
-                            <span className="text-white/90 text-sm tabular-nums font-mono">{ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)</span>
+                            <span className="text-white/90 text-sm tabular-nums font-mono">
+                              {ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)
+                              {' | '}
+                              <span className={calculateExpectedPnl(ord.price) >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}>
+                                {calculateExpectedPnl(ord.price) >= 0 ? '+' : ''}{calculateExpectedPnl(ord.price).toFixed(2)} USDT
+                              </span>
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -395,6 +469,9 @@ export default function ChartScreen() {
                   <p className="text-white/70 text-sm mt-2 text-center">Monitoreando el mercado. Sin posiciones activas en este símbolo.</p>
                 )}
               </NeoCard>
+              </>
+              );
+              })()}
 
               {history.length > 0 && (
                 <div className="mt-6">

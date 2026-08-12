@@ -4,9 +4,13 @@ import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/na
 import { NeoModal } from '../components/NeoModal';
 import { getStatus, SystemStatus, PositionInfo, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory } from '../services/api';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
+import { PriceTicker } from '../components/PriceTicker';
+import { useEngineStatus, useEngineStore } from '../store/useEngineStore';
+import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
 
 export default function ChartScreen() {
-  const [status, setStatus] = useState<SystemStatus | null>(null);
+  const globalStatus = useEngineStatus();
+  const setGlobalStatus = useEngineStore(state => state.setStatus);
   const [exchangeId, setExchangeId] = useState<string>('BINANCE');
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [isDropdownVisible, setDropdownVisible] = useState(false);
@@ -17,30 +21,34 @@ export default function ChartScreen() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [data, creds] = await Promise.all([
-        getStatus(),
-        getCredentials()
-      ]);
-      setStatus(data);
-      
-      if (creds && creds.length > 0) {
-        setExchangeId(creds[0].exchange_id.toUpperCase());
+      try {
+        const [data, creds] = await Promise.all([
+          getStatus(),
+          getCredentials()
+        ]);
+        setGlobalStatus(data);
+        
+        if (creds && creds.length > 0) {
+          setExchangeId(creds[0].exchange_id.toUpperCase());
+        }
+        
+        // Auto-select first symbol if none is selected
+        if (!selectedSymbol && data.active_symbols && data.active_symbols.length > 0) {
+          setSelectedSymbol(data.active_symbols[0]);
+        }
+      } catch (err) {
+        console.error("Error fetching initial chart data", err);
+      } finally {
+        setIsLoading(false);
       }
-      
-      // Auto-select first symbol if none is selected
-      if (!selectedSymbol && data.active_symbols && data.active_symbols.length > 0) {
-        setSelectedSymbol(data.active_symbols[0]);
-      }
-      setIsLoading(false);
     };
 
     fetchData();
-    const interval = setInterval(async () => {
-        const data = await getStatus();
-        setStatus(data);
-    }, 5000);
-    return () => clearInterval(interval);
+    // Polling removed in favor of WebSocket + Zustand
   }, []);
+
+  // Suscribirse a WebSockets para este símbolo
+  useEngineWebSocket(selectedSymbol);
 
   // Refrescar los datos del gráfico cuando cambia el símbolo o el estado
   useEffect(() => {
@@ -55,8 +63,8 @@ export default function ChartScreen() {
         
         // FIX: Recalcular órdenes DENTRO del effect con el símbolo actual
         // para evitar closure stale de standaloneOrders/activePosition
-        const currentPosition = status?.open_positions?.find(p => p.symbol === selectedSymbol);
-        const currentOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
+        const currentPosition = globalStatus?.open_positions?.find(p => p.symbol === selectedSymbol);
+        const currentOrders = globalStatus?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
         
         const chartOrders = [
             ...currentOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
@@ -80,13 +88,15 @@ export default function ChartScreen() {
     };
 
     updateChart();
-  }, [selectedSymbol, status, isWebViewLoaded]);
+  }, [selectedSymbol, globalStatus, isWebViewLoaded]);
 
   // Computed values for display (used in JSX, NOT in the effect above)
-  const activePosition: PositionInfo | undefined = status?.open_positions?.find(
+  const activePosition: PositionInfo | undefined = globalStatus?.open_positions?.find(
     (p) => p.symbol === selectedSymbol
   );
-  const standaloneOrders = status?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
+  const standaloneOrders = globalStatus?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
+
+  const status = globalStatus;
 
   const getTradingViewHTML = () => {
     return `
@@ -217,6 +227,9 @@ export default function ChartScreen() {
             onPress={() => setDropdownVisible(true)}
           >
             <Text style={styles.dropdownText}>{selectedSymbol || 'Cargando...'}</Text>
+            {selectedSymbol && (
+              <PriceTicker symbol={selectedSymbol} style={{ marginLeft: 8, fontSize: 16 }} />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -261,7 +274,10 @@ export default function ChartScreen() {
                     <View style={styles.positionDetails}>
                       <Text style={styles.posText}><Text style={styles.boldText}>Lado:</Text> {activePosition.side.toUpperCase()}</Text>
                       <Text style={styles.posText}><Text style={styles.boldText}>Entrada:</Text> {activePosition.entryPrice}</Text>
-                      <Text style={styles.posText}><Text style={styles.boldText}>Actual:</Text> {activePosition.markPrice}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                        <Text style={[styles.posText, { marginBottom: 0 }]}><Text style={styles.boldText}>Actual:</Text> </Text>
+                        <PriceTicker symbol={activePosition.symbol} />
+                      </View>
                       <Text style={styles.posText}><Text style={styles.boldText}>Apalancamiento:</Text> {activePosition.leverage}x</Text>
                       <Text style={styles.posText}><Text style={styles.boldText}>Contratos:</Text> {activePosition.contracts}</Text>
   

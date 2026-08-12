@@ -2,24 +2,12 @@
  * useEngineWebSocket.ts
  *
  * SINGLETON PERSISTENTE — Una sola conexión WS durante toda la sesión.
- *
- * Problemas anteriores resueltos:
- *  1. Dashboard y Chart llamaban al hook por separado → 2 sockets simultáneos
- *     que se destruían/recreaban al navegar entre páginas.
- *  2. La dependencia en [activeSymbol] destruía y recreaba el socket al cambiar
- *     símbolo, en lugar de solo enviar un nuevo "subscribe".
- *  3. Sin heartbeat, el proxy de Vite (y Nginx en producción) cerraba la
- *     conexión por inactividad → "socket hang up".
- *
- * Arquitectura nueva:
- *  - `useEngineWebSocketInit()` → llamar UNA VEZ desde PrivateRoute/App.
- *    Crea el socket global, arranca heartbeat y fallback REST.
- *  - `useEngineWebSocket(symbol)` → llamar desde páginas.
- *    Solo actualiza la suscripción de símbolo sin tocar el socket.
  */
 import { useEffect } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import { useEngineStore } from '../store/useEngineStore';
-import { getStatus } from '../services/api';
+import { getStatus, API_BASE_URL } from '../services/api';
+// Necesitamos importar Platform si lo usamos, pero aquí usaremos la API_BASE_URL configurada
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const HEARTBEAT_MS = 25_000;          // ping cada 25s (keepalive ante proxies)
@@ -38,12 +26,9 @@ let currentlySubscribedSymbol: string | null = null;
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 function getWsUrl(): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host =
-    window.location.hostname === 'localhost'
-      ? 'localhost:8000'
-      : window.location.host;
-  return `${protocol}//${host}/api/v1/ws/notifications`;
+  // En móvil usamos el API_BASE_URL que está configurado
+  const wsUrl = API_BASE_URL.replace('http', 'ws');
+  return `${wsUrl}/ws/notifications`;
 }
 
 function stopHeartbeat() {
@@ -90,10 +75,9 @@ function connectSingleton() {
   ws.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data);
-
-      // Emitir evento global para que otros hooks (ej. useTelegramNotifications)
-      // puedan reaccionar sin abrir su propio socket
-      window.dispatchEvent(new CustomEvent('ws:message', { detail: payload }));
+      
+      // Emitir evento global para que otros hooks (ej. TradeNotifications) puedan reaccionar
+      DeviceEventEmitter.emit('ws:message', payload);
 
       const { event: evtType, symbol, data } = payload;
       const { setStatus, updatePrice } = store();
@@ -135,7 +119,7 @@ function connectSingleton() {
 
   ws.onerror = (err) => {
     console.error('[WS] Error:', err);
-    ws.close(); // onclose se encarga de la reconexión
+    // ws.close(); // onclose se encarga de la reconexión. En RN, onerror y onclose suelen llamarse juntos
   };
 }
 
@@ -148,7 +132,7 @@ function disconnectSingleton() {
   store().setConnected(false);
 }
 
-// ─── Hook de inicialización (llamar UNA SOLA VEZ desde PrivateRoute / App) ───
+// ─── Hook de inicialización (llamar UNA SOLA VEZ desde AppNavigator) ───
 export const useEngineWebSocketInit = () => {
   useEffect(() => {
     intentionallyClosed = false;
@@ -166,13 +150,13 @@ export const useEngineWebSocketInit = () => {
     connectSingleton();
 
     return () => {
-      // Solo desconectar al hacer logout / desmontar la raíz privada
+      // Solo desconectar al desmontar la app (no suele ocurrir en RN salvo reload)
       disconnectSingleton();
     };
   }, []); // sin dependencias → se monta una sola vez
 };
 
-// ─── Hook para páginas — solo actualiza la suscripción de símbolo ─────────────
+// ─── Hook para pantallas — solo actualiza la suscripción de símbolo ─────────────
 export const useEngineWebSocket = (activeSymbol?: string | null) => {
   useEffect(() => {
     if (!activeSymbol) return;
@@ -192,11 +176,9 @@ export const useEngineWebSocket = (activeSymbol?: string | null) => {
       globalWs.send(JSON.stringify({ action: 'subscribe', symbol: activeSymbol }));
       console.log(`[WS] Suscrito a: ${activeSymbol}`);
     }
-    // Si no está abierto, onopen re-suscribirá usando activeSymbolGlobal
   }, [activeSymbol]);
 };
 
-/** @deprecated Usar useEngineWebSocket desde páginas */
 export const subscribeToSymbol = (symbol: string) => {
   console.log(`[WS] subscribeToSymbol: ${symbol}`);
 };
