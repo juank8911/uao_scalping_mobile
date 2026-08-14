@@ -240,7 +240,11 @@ export default function ChartScreen() {
             ...activePosition,
             price: activePosition.entryPrice,
             type: 'POSITION'
-          }] : [])
+          }] : []),
+          ...(activePosition?.orders ? activePosition.orders.map((o: any) => ({
+            ...o,
+            side: activePosition.side.toLowerCase() === 'buy' || activePosition.side.toLowerCase() === 'long' ? 'SELL' : 'BUY'
+          })) : [])
         ];
 
         const chartOrders = rawChartOrders.filter((value, index, self) =>
@@ -283,11 +287,12 @@ export default function ChartScreen() {
             let style = 2; // 2 = Dashed
             let labelVisible = true;
 
-            if (ord.type === 'TAKE_PROFIT') { lineColor = '#4ade80'; titleText = 'TP'; }
-            if (ord.type === 'STOP_LOSS') { lineColor = '#f87171'; titleText = 'SL'; }
-            if (ord.type === 'BREAK-EVEN') { lineColor = '#fbbf24'; titleText = 'B_E'; }
-            if (ord.type === 'LIQUIDATION') { lineColor = '#a855f7'; titleText = 'LIQ'; }
-            if (ord.type === 'POSITION') { titleText = ''; style = 0; lineColor = '#6b7280'; labelVisible = false; }
+            const t = ord.type ? ord.type.toUpperCase() : '';
+            if (t.includes('TAKE_PROFIT') || t.includes('TAKEPROFIT')) { lineColor = '#4ade80'; titleText = 'TP'; }
+            else if (t.includes('STOP_LOSS') || t.includes('STOPLOSS')) { lineColor = '#f87171'; titleText = 'SL'; }
+            else if (t === 'BREAK-EVEN') { lineColor = '#fbbf24'; titleText = 'B_E'; }
+            else if (t === 'LIQUIDATION') { lineColor = '#a855f7'; titleText = 'LIQ'; }
+            else if (t === 'POSITION') { titleText = ''; style = 0; lineColor = '#6b7280'; labelVisible = false; }
 
             const line = series.createPriceLine({
               price: ord.price,

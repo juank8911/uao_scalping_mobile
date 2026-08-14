@@ -5,7 +5,7 @@ import { NeoModal } from '../components/NeoModal';
 import { getStatus, SystemStatus, PositionInfo, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory } from '../services/api';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { PriceTicker } from '../components/PriceTicker';
-import { useEngineStatus, useEngineStore } from '../store/useEngineStore';
+import { useEngineStatus, useEngineStore, usePriceSelector } from '../store/useEngineStore';
 import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
 
 export default function ChartScreen() {
@@ -50,51 +50,62 @@ export default function ChartScreen() {
   // Suscribirse a WebSockets para este símbolo
   useEngineWebSocket(selectedSymbol);
 
-  // Refrescar los datos del gráfico cuando cambia el símbolo o el estado
+  // 1. Refrescar datos de velas e historial una vez (o cada 60s)
   useEffect(() => {
     if (!selectedSymbol || !webviewRef.current || !isWebViewLoaded) return;
     
-    const updateChart = async () => {
+    const fetchBaseData = async () => {
       try {
         const data = await fetchChartData(selectedSymbol);
         const trades = await fetchChartTrades(selectedSymbol);
         const historyData = await fetchChartHistory(selectedSymbol);
         setHistory(historyData);
         
-        // FIX: Recalcular órdenes DENTRO del effect con el símbolo actual
-        // para evitar closure stale de standaloneOrders/activePosition
-        const currentPosition = globalStatus?.open_positions?.find(p => p.symbol === selectedSymbol);
-        const currentOrders = globalStatus?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
-        
-        const chartOrders = [
-            ...currentOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
-            ...(currentPosition?.orders || []).map(o => ({ 
-                price: o.price, 
-                type: o.type, 
-                side: currentPosition?.side === 'long' ? 'SELL' : 'BUY' 
-            }))
-        ];
-        
         const script = `
           if (window.updateChartData) {
-            window.updateChartData(${JSON.stringify(data)}, ${JSON.stringify(trades)}, ${JSON.stringify(chartOrders)});
+            window.updateChartData(${JSON.stringify(data)}, ${JSON.stringify(trades)});
           }
           true;
         `;
         webviewRef.current?.injectJavaScript(script);
       } catch (err) {
-        console.error("Error updating chart:", err);
+        console.error("Error updating chart base data:", err);
       }
     };
 
-    updateChart();
-  }, [selectedSymbol, globalStatus, isWebViewLoaded]);
+    fetchBaseData();
+    const interval = setInterval(fetchBaseData, 60000); // Refrescar velas cada 1m
+    return () => clearInterval(interval);
+  }, [selectedSymbol, isWebViewLoaded]);
 
-  // Computed values for display (used in JSX, NOT in the effect above)
+  // Computed values for display (used in JSX and Live Update)
+  const currentPrice = usePriceSelector(selectedSymbol || '');
   const activePosition: PositionInfo | undefined = globalStatus?.open_positions?.find(
     (p) => p.symbol === selectedSymbol
   );
   const standaloneOrders = globalStatus?.open_orders?.filter(o => o.symbol === selectedSymbol) || [];
+
+  // 2. Refrescar precio en vivo y órdenes instantáneamente
+  useEffect(() => {
+    if (!selectedSymbol || !webviewRef.current || !isWebViewLoaded) return;
+
+    const chartOrders = [
+        ...standaloneOrders.map(o => ({ price: o.price, type: o.type, side: o.side })),
+        ...(activePosition?.orders || []).map(o => ({ 
+            price: o.price, 
+            type: o.type, 
+            side: activePosition?.side === 'long' ? 'SELL' : 'BUY' 
+        }))
+    ];
+
+    const script = `
+      if (window.updateLiveState) {
+        window.updateLiveState(${currentPrice || 'null'}, ${JSON.stringify(chartOrders)});
+      }
+      true;
+    `;
+    webviewRef.current?.injectJavaScript(script);
+  }, [selectedSymbol, isWebViewLoaded, currentPrice, activePosition, standaloneOrders]);
 
   const status = globalStatus;
 
@@ -138,26 +149,21 @@ export default function ChartScreen() {
             });
 
             let currentLines = [];
+            let lastCandle = null;
 
             // Capturar errores y enviarlos a React Native
             window.onerror = function(message, source, lineno, colno, error) {
                window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: message }));
             };
 
-            window.updateChartData = function(data, trades, orders) {
+            window.updateChartData = function(data, trades) {
                 try {
-                    // FIX 1: Limpiar markers antiguos SIEMPRE (evita markers fantasma)
                     candleSeries.setMarkers([]);
                     
-                    // FIX 2: Limpiar price lines antiguas SIEMPRE
-                    if (typeof currentLines !== 'undefined') {
-                        currentLines.forEach(line => candleSeries.removePriceLine(line));
-                        currentLines = [];
-                    }
-
                     // 3. Setear nuevos datos
                     if (data && data.length > 0) {
                         candleSeries.setData(data);
+                        lastCandle = data[data.length - 1];
                     }
 
                     // FIX 3: AUTO-FIT al rango del nuevo símbolo
@@ -174,7 +180,6 @@ export default function ChartScreen() {
                         }));
                         markers.sort((a, b) => a.time - b.time);
                         
-                        // Eliminar tiempos duplicados (Lightweight Charts crashea con duplicados)
                         const uniqueMarkers = [];
                         let lastTime = 0;
                         for (let m of markers) {
@@ -188,9 +193,32 @@ export default function ChartScreen() {
                           candleSeries.setMarkers(uniqueMarkers);
                         }
                     }
+                } catch (e) {
+                   window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: e.message }));
+                }
+            };
 
-                    // 5. Pintar nuevas price lines
+            window.updateLiveState = function(price, orders) {
+                try {
+                    // Update live candle price
+                    if (price && lastCandle) {
+                        // Create a clone to avoid mutating the locked object if strict mode
+                        const updatedCandle = { ...lastCandle };
+                        updatedCandle.close = price;
+                        if (price > updatedCandle.high) updatedCandle.high = price;
+                        if (price < updatedCandle.low) updatedCandle.low = price;
+                        
+                        candleSeries.update(updatedCandle);
+                        lastCandle = updatedCandle;
+                    }
+
+                    // Update live order lines
                     if (orders) {
+                        if (typeof currentLines !== 'undefined') {
+                            currentLines.forEach(line => candleSeries.removePriceLine(line));
+                            currentLines = [];
+                        }
+
                         orders.forEach(ord => {
                             let lineColor = ord.side === 'BUY' ? '#4ade80' : '#f87171';
                             if (ord.type === 'TAKE_PROFIT') lineColor = '#4ade80';

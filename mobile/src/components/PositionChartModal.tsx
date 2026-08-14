@@ -12,9 +12,10 @@ interface PositionChartModalProps {
 }
 
 import { useCandlestickChart } from 'react-native-wagmi-charts';
+import { usePriceSelector } from '../store/useEngineStore';
 
 // Component that dynamically positions price lines based on chart domain
-function ChartPriceLines({ entryPrice, tpPrice, slPrice }: { entryPrice: number, tpPrice: number, slPrice: number }) {
+function ChartPriceLines({ entryPrice, tpPrice, slPrice, markPrice }: { entryPrice: number, tpPrice: number, slPrice: number, markPrice?: number }) {
   const { domain, height } = useCandlestickChart();
   const [min, max] = domain || [0, 1];
   
@@ -27,14 +28,16 @@ function ChartPriceLines({ entryPrice, tpPrice, slPrice }: { entryPrice: number,
   const entryY = getY(entryPrice);
   const tpY = getY(tpPrice);
   const slY = getY(slPrice);
+  const markY = markPrice ? getY(markPrice) : -1000;
 
-  const renderLine = (y: number, label: string, color: string) => {
+  const renderLine = (y: number, label: string, color: string, rightAlign: boolean = false) => {
     // Only render if within the chart height (or slightly outside)
     if (y < -20 || y > height + 20) return null;
     return (
       <View style={{ position: 'absolute', top: y - 10, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', height: 20 }}>
-        <View style={{ flex: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: color }} />
-        <Text style={{ fontSize: 10, fontWeight: 'bold', color: color, marginLeft: 4 }}>{label}</Text>
+        {!rightAlign && <View style={{ flex: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: color }} />}
+        <Text style={{ fontSize: 10, fontWeight: 'bold', color: color, marginLeft: 4, marginRight: 4 }}>{label}</Text>
+        {rightAlign && <View style={{ flex: 1, borderTopWidth: 1, borderStyle: 'dashed', borderColor: color }} />}
       </View>
     );
   };
@@ -44,12 +47,13 @@ function ChartPriceLines({ entryPrice, tpPrice, slPrice }: { entryPrice: number,
       {entryPrice > 0 && renderLine(entryY, `Entry ${entryPrice}`, '#34d8ff')}
       {tpPrice > 0 && renderLine(tpY, `TP ${tpPrice}`, '#4ade80')}
       {slPrice > 0 && renderLine(slY, `SL ${slPrice}`, '#f87171')}
+      {markPrice && markPrice > 0 && renderLine(markY, `${markPrice}`, '#ffffff', true)}
     </>
   );
 }
 
 // Memoized wrapper to prevent the chart from jumping/remounting on every polling update
-const MemoizedChart = React.memo(({ data, entryPrice, tpPrice, slPrice }: { data: any[], entryPrice: number, tpPrice: number, slPrice: number }) => {
+const MemoizedChart = React.memo(({ data, entryPrice, tpPrice, slPrice, markPrice }: { data: any[], entryPrice: number, tpPrice: number, slPrice: number, markPrice?: number }) => {
   return (
     <CandlestickChart.Provider data={data}>
       <View style={{ position: 'relative' }}>
@@ -57,7 +61,7 @@ const MemoizedChart = React.memo(({ data, entryPrice, tpPrice, slPrice }: { data
           <CandlestickChart.Candles />
           <CandlestickChart.Crosshair />
         </CandlestickChart>
-        <ChartPriceLines entryPrice={entryPrice} tpPrice={tpPrice} slPrice={slPrice} />
+        <ChartPriceLines entryPrice={entryPrice} tpPrice={tpPrice} slPrice={slPrice} markPrice={markPrice} />
       </View>
       <CandlestickChart.DatetimeText style={styles.chartLabel} />
       <CandlestickChart.PriceText type="open" style={styles.chartLabel} />
@@ -68,29 +72,67 @@ const MemoizedChart = React.memo(({ data, entryPrice, tpPrice, slPrice }: { data
   return prev.data === next.data && 
          prev.entryPrice === next.entryPrice && 
          prev.tpPrice === next.tpPrice && 
-         prev.slPrice === next.slPrice;
+         prev.slPrice === next.slPrice &&
+         prev.markPrice === next.markPrice;
 });
 
 export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible, onClose, position }) => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const livePrice = usePriceSelector(position?.symbol || '');
 
+  // Efecto para actualizar el precio en vivo en la última vela
   useEffect(() => {
-    if (visible && position?.symbol) {
-      setLoading(true);
-      fetchChartData(position.symbol).then((ohlcv) => {
-        // format data for wagmi-charts: { timestamp: number, open: number, high: number, low: number, close: number }
-        const formatted = ohlcv.map((candle: any) => ({
-          timestamp: candle.timestamp,
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-        }));
-        setData(formatted);
-        setLoading(false);
+    if (livePrice && data.length > 0) {
+      setData(prevData => {
+        if (prevData.length === 0) return prevData;
+        const newData = [...prevData];
+        const lastCandle = { ...newData[newData.length - 1] };
+        
+        if (lastCandle.close === livePrice) return prevData;
+        
+        lastCandle.close = livePrice;
+        if (livePrice > lastCandle.high) lastCandle.high = livePrice;
+        if (livePrice < lastCandle.low) lastCandle.low = livePrice;
+        
+        newData[newData.length - 1] = lastCandle;
+        return newData;
       });
     }
+  }, [livePrice]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    const loadData = async (showLoading: boolean) => {
+      if (position?.symbol) {
+        if (showLoading) setLoading(true);
+        try {
+          const ohlcv = await fetchChartData(position.symbol);
+          const formatted = ohlcv.map((candle: any) => ({
+            timestamp: candle.timestamp,
+            open: candle.open,
+            high: candle.high,
+            low: candle.low,
+            close: candle.close,
+          }));
+          setData(formatted);
+        } catch (err) {
+          console.error("Error fetching chart data", err);
+        } finally {
+          if (showLoading) setLoading(false);
+        }
+      }
+    };
+
+    if (visible && position?.symbol) {
+      loadData(true);
+      interval = setInterval(() => loadData(false), 2000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [visible, position?.symbol]);
 
   if (!position) return null;
@@ -146,7 +188,7 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
             {loading ? (
               <ActivityIndicator size="large" color="#fff" />
             ) : data.length > 0 ? (
-              <MemoizedChart data={data} entryPrice={position.entryPrice} tpPrice={tpPrice} slPrice={slPrice} />
+              <MemoizedChart data={data} entryPrice={position.entryPrice} tpPrice={tpPrice} slPrice={slPrice} markPrice={livePrice || position.markPrice} />
             ) : (
               <Text style={{ color: '#666', textAlign: 'center' }}>No chart data available</Text>
             )}
