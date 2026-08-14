@@ -165,7 +165,7 @@ export default function ChartScreen() {
                 latestCandle.low = updatedCandle.low;
                 latestCandle.close = updatedCandle.close;
               }
-              
+
               currentLinesRef.current.forEach(item => {
                 if (item && (item.type === 'TAKE_PROFIT' || item.type === 'STOP_LOSS') && item.line) {
                   const distancePct = Math.abs((item.price - currentPrice) / currentPrice) * 100;
@@ -240,11 +240,7 @@ export default function ChartScreen() {
             ...activePosition,
             price: activePosition.entryPrice,
             type: 'POSITION'
-          }] : []),
-          ...(activePosition?.orders ? activePosition.orders.map((o: any) => ({
-            ...o,
-            side: activePosition.side.toLowerCase() === 'buy' || activePosition.side.toLowerCase() === 'long' ? 'SELL' : 'BUY'
-          })) : [])
+          }] : [])
         ];
 
         const chartOrders = rawChartOrders.filter((value, index, self) =>
@@ -287,12 +283,11 @@ export default function ChartScreen() {
             let style = 2; // 2 = Dashed
             let labelVisible = true;
 
-            const t = ord.type ? ord.type.toUpperCase() : '';
-            if (t.includes('TAKE_PROFIT') || t.includes('TAKEPROFIT')) { lineColor = '#4ade80'; titleText = 'TP'; }
-            else if (t.includes('STOP_LOSS') || t.includes('STOPLOSS')) { lineColor = '#f87171'; titleText = 'SL'; }
-            else if (t === 'BREAK-EVEN') { lineColor = '#fbbf24'; titleText = 'B_E'; }
-            else if (t === 'LIQUIDATION') { lineColor = '#a855f7'; titleText = 'LIQ'; }
-            else if (t === 'POSITION') { titleText = ''; style = 0; lineColor = '#6b7280'; labelVisible = false; }
+            if (ord.type === 'TAKE_PROFIT') { lineColor = '#4ade80'; titleText = 'TP'; }
+            if (ord.type === 'STOP_LOSS') { lineColor = '#f87171'; titleText = 'SL'; }
+            if (ord.type === 'BREAK-EVEN') { lineColor = '#fbbf24'; titleText = 'B_E'; }
+            if (ord.type === 'LIQUIDATION') { lineColor = '#a855f7'; titleText = 'LIQ'; }
+            if (ord.type === 'POSITION') { titleText = ''; style = 0; lineColor = '#6b7280'; labelVisible = false; }
 
             const line = series.createPriceLine({
               price: ord.price,
@@ -408,74 +403,74 @@ export default function ChartScreen() {
                 };
                 return (
                   <>
-              <NeoCard
-                title="Estado de Operación"
-                value={activePosition ? 'POSICIÓN ABIERTA' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'ESPERANDO SEÑAL')}
-              >
-                {activePosition ? (
-                  <div className="mt-3 bg-black/20 p-3 rounded-lg relative">
-                    <div className="absolute top-3 right-3 flex gap-2">
-                      <NeoButton
-                        variant="danger"
-                        size="small"
-                        onClick={handleClosePosition}
-                        disabled={closingPos}
-                      >
-                        {closingPos ? 'Cerrando...' : 'Cerrar'}
-                      </NeoButton>
-                    </div>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">PNL:</span>{' '}<span className={`font-bold tabular-nums font-mono ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>{livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT</span></p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Lado:</span> {isShortActive ? 'SHORT 🔴' : 'LONG 🟢'}</p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Entrada:</span> <span className="tabular-nums font-mono">{activePosition.entryPrice}</span></p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Actual:</span> <span className="tabular-nums font-mono">{activePosition.markPrice}</span></p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Apalancamiento:</span> {activePosition.leverage}x</p>
-                    <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Contratos:</span> {activePosition.contracts}</p>
-                    {activePosition.confidence !== undefined && (
-                      <p className="text-white/90 text-sm mb-1.5">
-                        <span className="font-bold text-[#34d8ff]">Confianza IA:</span> {(activePosition.confidence * 100).toFixed(1)}%
-                      </p>
-                    )}
-
-                    {activePosition.orders && activePosition.orders.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-[#34d8ff]/10">
-                        <p className="font-bold text-[#34d8ff] mb-2">Órdenes Pendientes de Salida:</p>
-                        {activePosition.orders.map((ord, idx) => (
-                          <div key={idx} className="flex flex-row justify-between items-center mb-2">
-                            <NeoBadge
-                              label={ord.type}
-                              variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'}
-                            />
-                            <span className="text-white/90 text-sm tabular-nums font-mono">
-                              {ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)
-                              {' | '}
-                              <span className={calculateExpectedPnl(ord.price) >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}>
-                                {calculateExpectedPnl(ord.price) >= 0 ? '+' : ''}{calculateExpectedPnl(ord.price).toFixed(2)} USDT
-                              </span>
-                            </span>
+                    <NeoCard
+                      title="Estado de Operación"
+                      value={activePosition ? 'POSICIÓN ABIERTA' : (standaloneOrders.length > 0 ? 'ÓRDENES PENDIENTES' : 'ESPERANDO SEÑAL')}
+                    >
+                      {activePosition ? (
+                        <div className="mt-3 bg-black/20 p-3 rounded-lg relative">
+                          <div className="absolute top-3 right-3 flex gap-2">
+                            <NeoButton
+                              variant="danger"
+                              size="small"
+                              onClick={handleClosePosition}
+                              disabled={closingPos}
+                            >
+                              {closingPos ? 'Cerrando...' : 'Cerrar'}
+                            </NeoButton>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : standaloneOrders.length > 0 ? (
-                  <div className="mt-3 bg-black/20 p-3 rounded-lg">
-                    <p className="font-bold text-[#34d8ff] mb-2">Órdenes de Entrada Abiertas:</p>
-                    {standaloneOrders.map((ord, idx) => (
-                      <div key={idx} className="flex flex-row justify-between items-center mb-2">
-                        <NeoBadge
-                          label={`${ord.side} ${ord.type}`}
-                          variant={ord.side === 'BUY' ? 'success' : 'danger'}
-                        />
-                        <span className="text-white/90 text-sm">{ord.price.toFixed(7)} (Cant: {ord.amount})</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-white/70 text-sm mt-2 text-center">Monitoreando el mercado. Sin posiciones activas en este símbolo.</p>
-                )}
-              </NeoCard>
-              </>
-              );
+                          <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">PNL:</span>{' '}<span className={`font-bold tabular-nums font-mono ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>{livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT</span></p>
+                          <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Lado:</span> {isShortActive ? 'SHORT 🔴' : 'LONG 🟢'}</p>
+                          <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Entrada:</span> <span className="tabular-nums font-mono">{activePosition.entryPrice}</span></p>
+                          <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Actual:</span> <span className="tabular-nums font-mono">{activePosition.markPrice}</span></p>
+                          <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Apalancamiento:</span> {activePosition.leverage}x</p>
+                          <p className="text-white/90 text-sm mb-1.5"><span className="font-bold text-[#34d8ff]">Contratos:</span> {activePosition.contracts}</p>
+                          {activePosition.confidence !== undefined && (
+                            <p className="text-white/90 text-sm mb-1.5">
+                              <span className="font-bold text-[#34d8ff]">Confianza IA:</span> {(activePosition.confidence * 100).toFixed(1)}%
+                            </p>
+                          )}
+
+                          {activePosition.orders && activePosition.orders.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-[#34d8ff]/10">
+                              <p className="font-bold text-[#34d8ff] mb-2">Órdenes Pendientes de Salida:</p>
+                              {activePosition.orders.map((ord, idx) => (
+                                <div key={idx} className="flex flex-row justify-between items-center mb-2">
+                                  <NeoBadge
+                                    label={ord.type}
+                                    variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'}
+                                  />
+                                  <span className="text-white/90 text-sm tabular-nums font-mono">
+                                    {ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)
+                                    {' | '}
+                                    <span className={calculateExpectedPnl(ord.price) >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}>
+                                      {calculateExpectedPnl(ord.price) >= 0 ? '+' : ''}{calculateExpectedPnl(ord.price).toFixed(2)} USDT
+                                    </span>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : standaloneOrders.length > 0 ? (
+                        <div className="mt-3 bg-black/20 p-3 rounded-lg">
+                          <p className="font-bold text-[#34d8ff] mb-2">Órdenes de Entrada Abiertas:</p>
+                          {standaloneOrders.map((ord, idx) => (
+                            <div key={idx} className="flex flex-row justify-between items-center mb-2">
+                              <NeoBadge
+                                label={`${ord.side} ${ord.type}`}
+                                variant={ord.side === 'BUY' ? 'success' : 'danger'}
+                              />
+                              <span className="text-white/90 text-sm">{ord.price.toFixed(7)} (Cant: {ord.amount})</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-white/70 text-sm mt-2 text-center">Monitoreando el mercado. Sin posiciones activas en este símbolo.</p>
+                      )}
+                    </NeoCard>
+                  </>
+                );
               })()}
 
               {history.length > 0 && (
@@ -533,8 +528,8 @@ export default function ChartScreen() {
               <button
                 key={item}
                 className={`py-3.5 border-b px-3 rounded-lg transition-colors text-center ${selectedSymbol === item
-                    ? 'border-[#34d8ff]/20 bg-[#34d8ff]/10 text-[#34d8ff] font-bold tracking-widest'
-                    : 'border-white/5 bg-transparent text-white/70 font-normal hover:bg-white/5'
+                  ? 'border-[#34d8ff]/20 bg-[#34d8ff]/10 text-[#34d8ff] font-bold tracking-widest'
+                  : 'border-white/5 bg-transparent text-white/70 font-normal hover:bg-white/5'
                   }`}
                 onClick={() => {
                   setSelectedSymbol(item);

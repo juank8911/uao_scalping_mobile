@@ -6,6 +6,7 @@ import { getToken } from '../utils/auth';
 import { View, ActivityIndicator } from 'react-native';
 import { NeoLayout } from 'jeikei-design-system/native';
 import { useEngineWebSocketInit } from '../hooks/useEngineWebSocket';
+import { useTelegramNotifications } from '../hooks/useTelegramNotifications';
 import { TradeNotifications } from '../components/TradeNotifications';
 
 const Stack = createNativeStackNavigator();
@@ -16,6 +17,7 @@ export default function AppNavigator() {
 
   // Initialize global websocket connection (only happens once)
   useEngineWebSocketInit();
+  useTelegramNotifications();
 
   useEffect(() => {
     const checkAuth = async () => {
