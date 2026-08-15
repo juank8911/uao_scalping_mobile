@@ -120,13 +120,13 @@ export default function DashboardScreen() {
 
           <NeoCard
             title="Global Balance & PnL"
-            value={status && status.global_balance !== undefined ? `$${status.global_balance.toFixed(2)}` : '...'}
+            value={status && status.global_balance !== undefined ? `$${Number(status.global_balance || 0).toFixed(2)}` : '...'}
             trend={{ value: 'USDT', direction: 'up' }}
           >
             <div className="flex justify-between items-center mt-2 border-t border-white/10 pt-2">
               <span className="text-white/70 text-sm">PnL del Día:</span>
               <span className={`font-bold ${status && status.daily_pnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
-                {status && status.daily_pnl >= 0 ? '+' : ''}{status ? status.daily_pnl.toFixed(2) : '0.00'} USDT
+                {status && status.daily_pnl >= 0 ? '+' : ''}{status ? Number(status.daily_pnl || 0).toFixed(2) : '0.00'} USDT
               </span>
             </div>
             <p className="text-white/50 text-[10px] mt-1">Modo: {status?.execution_mode || '...'}</p>
@@ -145,15 +145,15 @@ export default function DashboardScreen() {
                 <p className="text-white/50 text-xs">No hay posiciones activas en este momento.</p>
               ) : (
                 status.open_positions.map((pos, idx) => {
-                  const isShort = pos.side.toUpperCase() === 'SHORT' || pos.side.toUpperCase() === 'SELL';
+                  const isShort = (pos.side || "").toUpperCase() === 'SHORT' || (pos.side || "").toUpperCase() === 'SELL';
                   const contractSize = pos.contractSize || 1;
                   const currentMarkPrice = pos.markPrice;
                   const calculatedPnl = isShort
-                    ? (pos.entryPrice - currentMarkPrice) * pos.contracts * contractSize
-                    : (currentMarkPrice - pos.entryPrice) * pos.contracts * contractSize;
-                  const margin = (pos.entryPrice * pos.contracts * contractSize) / pos.leverage;
+                    ? ((Number(pos.entryPrice) || 0) - currentMarkPrice) * (Number(pos.contracts) || 0) * contractSize
+                    : (currentMarkPrice - (Number(pos.entryPrice) || 0)) * (Number(pos.contracts) || 0) * contractSize;
+                  const margin = ((Number(pos.entryPrice) || 0) * (Number(pos.contracts) || 0) * contractSize) / pos.leverage;
                   const roePercent = margin > 0 ? (calculatedPnl / margin) * 100 : 0;
-                  const valueUsdt = pos.contracts * contractSize * currentMarkPrice;
+                  const valueUsdt = (Number(pos.contracts) || 0) * contractSize * currentMarkPrice;
 
                   return (
                     <div key={idx} className="bg-white/5 p-2 rounded border border-white/5 text-xs flex justify-between items-center">
@@ -163,11 +163,11 @@ export default function DashboardScreen() {
                           {!isShort ? 'LONG' : 'SHORT'} {pos.leverage}x
                         </span>
                         <div className="text-white/70 mt-0.5 text-[10px] tabular-nums font-mono">
-                          Cant: {pos.contracts} | Total: ${valueUsdt.toFixed(2)} | Inv: ${margin.toFixed(2)}
+                          Cant: {(Number(pos.contracts) || 0)} | Total: ${Number(valueUsdt || 0).toFixed(2)} | Inv: ${Number(margin || 0).toFixed(2)}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-white font-mono tabular-nums">${currentMarkPrice.toFixed(7)}</div>
+                        <div className="text-white font-mono tabular-nums">${Number(currentMarkPrice || 0).toFixed(7)}</div>
                         <div className={`font-bold tabular-nums font-mono ${roePercent >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
                           {roePercent >= 0 ? '+' : ''}{roePercent.toFixed(2)}%
                         </div>
@@ -203,19 +203,19 @@ export default function DashboardScreen() {
         </div>
 
         {status?.active_symbols && status.active_symbols.length > 0 ? (
-          status.active_symbols.map((symbol) => {
+          status.active_symbols.map((symbol: string) => {
             const isPaper = status.execution_mode === 'PAPER_TRADING';
             const position = status.open_positions?.find((p) => p.symbol === symbol);
             const standaloneOrders = status.open_orders?.filter(o => o.symbol === symbol) || [];
 
             const isShortPos = position
-              ? (position.side.toUpperCase() === 'SHORT' || position.side.toUpperCase() === 'SELL')
+              ? ((position.side || "").toUpperCase() === 'SHORT' || (position.side || "").toUpperCase() === 'SELL')
               : false;
             const contractSizePos = position?.contractSize || 1;
             const livePnl = position
               ? isShortPos
-                ? (position.entryPrice - position.markPrice) * position.contracts * contractSizePos
-                : (position.markPrice - position.entryPrice) * position.contracts * contractSizePos
+                ? ((Number(position.entryPrice) || 0) - position.markPrice) * (Number(position.contracts) || 0) * contractSizePos
+                : (position.markPrice - (Number(position.entryPrice) || 0)) * (Number(position.contracts) || 0) * contractSizePos
               : 0;
 
             const handleClosePosition = async (e: React.MouseEvent, sym: string) => {
@@ -261,7 +261,7 @@ export default function DashboardScreen() {
                           <NeoButton
                             variant="secondary"
                             size="small"
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
                               navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
                             }}
@@ -271,7 +271,7 @@ export default function DashboardScreen() {
                           <NeoButton
                             variant="danger"
                             size="small"
-                            onClick={(e) => handleClosePosition(e, position.symbol)}
+                            onClick={(e: React.MouseEvent) => handleClosePosition(e, position.symbol)}
                             disabled={closingSymbol === position.symbol}
                           >
                             {closingSymbol === position.symbol ? 'Cerrando...' : 'Cerrar'}
@@ -286,11 +286,11 @@ export default function DashboardScreen() {
                         <p className="text-white/90 text-sm mb-1.5 mt-4">
                           <span className="font-bold text-[#4DA8DA]">PNL:</span>{' '}
                           <span className={`font-bold text-lg tabular-nums font-mono ${livePnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
-                            {livePnl >= 0 ? '+' : ''}{livePnl.toFixed(2)} USDT
+                            {livePnl >= 0 ? '+' : ''}{Number(livePnl || 0).toFixed(2)} USDT
                           </span>
                         </p>
                         <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Lado:</span> {isShortPos ? 'SHORT 🔴' : 'LONG 🟢'}</p>
-                        <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Entrada:</span> <span className="tabular-nums font-mono">{position.entryPrice}</span></p>
+                        <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Entrada:</span> <span className="tabular-nums font-mono">{(Number(position.entryPrice) || 0)}</span></p>
                         <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Actual:</span> <span className="tabular-nums font-mono">{position.markPrice}</span></p>
                         <p className="text-white/90 text-sm mb-1"><span className="font-bold text-[#4DA8DA]">Apalancamiento:</span> {position.leverage}x</p>
 
@@ -300,13 +300,13 @@ export default function DashboardScreen() {
                             {position.orders.map((ord, idx) => {
                               const csz = position.contractSize || 1;
                               const expectedPnL = isShortPos
-                                ? (position.entryPrice - ord.price) * position.contracts * csz
-                                : (ord.price - position.entryPrice) * position.contracts * csz;
+                                ? ((Number(position.entryPrice) || 0) - (Number(ord.price) || 0)) * (Number(position.contracts) || 0) * csz
+                                : ((Number(ord.price) || 0) - (Number(position.entryPrice) || 0)) * (Number(position.contracts) || 0) * csz;
                               const isProfit = expectedPnL > 0;
 
                               return (
                                 <p key={idx} className="text-white/90 text-sm mb-1">
-                                  • {ord.type}: <span className="tabular-nums font-mono">{ord.price.toFixed(7)}</span> ({ord.distance_pct.toFixed(2)}%)
+                                  • {ord.type}: <span className="tabular-nums font-mono">{Number((Number(ord.price) || 0) || 0).toFixed(7)}</span> ({ord.distance_pct.toFixed(2)}%)
                                   <span className={isProfit ? 'text-[#26a69a]' : 'text-[#ef5350]'}>
                                     {' '}[PnL: <span className="tabular-nums font-mono">{expectedPnL > 0 ? '+' : ''}{expectedPnL.toFixed(2)}</span> USDT]
                                   </span>
@@ -322,7 +322,7 @@ export default function DashboardScreen() {
                           <NeoButton
                             variant="secondary"
                             size="small"
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
                               navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
                             }}
@@ -352,7 +352,7 @@ export default function DashboardScreen() {
                               label={`${ord.side} ${ord.type}`}
                               variant={ord.side === 'BUY' ? 'success' : 'danger'}
                             />
-                            <p className="text-white/90 text-sm mb-1 mt-1 tabular-nums font-mono">Precio: {ord.price.toFixed(7)} | Cant: {ord.amount}</p>
+                            <p className="text-white/90 text-sm mb-1 mt-1 tabular-nums font-mono">Precio: {Number((Number(ord.price) || 0) || 0).toFixed(7)} | Cant: {ord.amount}</p>
                             <p className="text-white/70 text-xs mt-0.5">
                               Estado: {ord.status === 'pending (simulado)' ? 'Esperando que el precio la toque…' : ord.status}
                             </p>
@@ -365,7 +365,7 @@ export default function DashboardScreen() {
                           <NeoButton
                             variant="secondary"
                             size="small"
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
                               navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
                             }}
@@ -382,7 +382,7 @@ export default function DashboardScreen() {
                           <div className="mt-4 bg-white/5 backdrop-blur-md border border-white/10 p-3 rounded-lg flex flex-col items-center w-full max-w-xs shadow-[inset_0_1px_1px_rgba(255,255,255,0.1)]">
                             <p className="text-[#A0A0A0] text-xs">Precio Actual en Vivo</p>
                             <p className="font-bold text-white text-xl mt-1">
-                              {status.latest_prices[symbol].toFixed(7)}
+                              {Number(status.latest_prices[symbol] || 0).toFixed(7)}
                             </p>
                           </div>
                         )}
@@ -429,7 +429,7 @@ export default function DashboardScreen() {
       >
         {status?.active_symbols && status.active_symbols.length > 0 ? (
           <div className="flex flex-col">
-            {status.active_symbols.map((item) => (
+            {status.active_symbols.map((item: string) => (
               <button
                 key={item}
                 className={`py-3.5 border-b px-3 rounded-lg transition-colors ${selectedSymbol === item

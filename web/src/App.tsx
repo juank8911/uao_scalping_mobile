@@ -1,6 +1,5 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, Outlet, useLocation } from 'react-router-dom';
-import { Activity, LayoutDashboard, Settings, MessageSquare } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, Outlet } from 'react-router-dom';
 import { AuthModal } from './components/AuthModal';
 
 import LoginScreen from './pages/Login';
@@ -9,7 +8,8 @@ import ControlPanelScreen from './pages/ControlPanel';
 import ChartScreen from './pages/Chart';
 import HistoryScreen from './pages/History';
 import TelegramConfigScreen from './pages/TelegramConfig';
-import { getToken } from './utils/auth';
+import { getToken, deleteToken } from './utils/auth';
+import { getCurrentUser } from './services/api';
 
 import { RightSidebarNavigation } from './components/RightSidebarNavigation';
 import { LeftHistoryPanel } from './components/LeftHistoryPanel';
@@ -21,15 +21,23 @@ const PrivateRoute = () => {
   useTelegramNotifications();
   useEngineWebSocketInit(); // WebSocket singleton — persiste durante toda la sesión
   const navigate = useNavigate();
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    const handleUnauthorized = () => {
-      navigate('/login');
+    let active = true;
+    const validateSession = async () => {
+      if (checkingAuth) { return null; }
+  if (!getToken()) { if (active) setCheckingAuth(false); return; }
+      try { await getCurrentUser(); }
+      catch { deleteToken(); navigate('/login'); }
+      finally { if (active) setCheckingAuth(false); }
     };
+    validateSession();
+    const handleUnauthorized = () => { deleteToken(); navigate('/login'); };
     window.addEventListener('unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('unauthorized', handleUnauthorized);
+    return () => { active = false; window.removeEventListener('unauthorized', handleUnauthorized); };
   }, [navigate]);
-
+  if (checkingAuth) { return null; }
   if (!getToken()) {
     return <Navigate to="/login" replace />;
   }

@@ -103,7 +103,7 @@ export default function HistoryScreen() {
                     {trade.sl_price && <p className="text-white/70 text-xs"><span className="font-bold">Stop Loss (SL):</span> {trade.sl_price}</p>}
                     <p className="text-white/70 text-xs"><span className="font-bold">Apalancamiento:</span> {trade.leverage}x</p>
                     <p className="text-white/50 text-xs mt-2">
-                      Completada: {new Date(trade.closed_at).toLocaleString()}
+                      Completada: {new Date(trade.closed_at || 0).toLocaleString()}
                     </p>
                   </div>
                 </div>

@@ -50,3 +50,7 @@ export const authenticateBiometrically = async (promptMessage: string = 'Autenti
 
   return result.success;
 };
+
+const authListeners = new Set<() => void>();
+export const onAuthRequired = (listener: () => void): (() => void) => { authListeners.add(listener); return () => authListeners.delete(listener); };
+export const notifyAuthRequired = (): void => { authListeners.forEach((listener) => listener()); };

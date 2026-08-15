@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/LoginScreen';
 import MainDrawer from './MainDrawer';
-import { getToken } from '../utils/auth';
+import { getToken, onAuthRequired } from '../utils/auth';
+import { getCurrentUser } from '../services/api';
 import { View, ActivityIndicator } from 'react-native';
 import { NeoLayout } from 'jeikei-design-system/native';
 import { useEngineWebSocketInit } from '../hooks/useEngineWebSocket';
@@ -26,6 +27,7 @@ export default function AppNavigator() {
         console.log('calling getToken');
         const token = await getToken();
         console.log('getToken resolved', token);
+        if (token) { await getCurrentUser(); }
         setIsAuthenticated(!!token);
       } catch (error) {
         console.warn('CheckAuth error:', error);
@@ -37,6 +39,8 @@ export default function AppNavigator() {
     };
     checkAuth();
   }, []);
+
+  useEffect(() => onAuthRequired(() => setIsAuthenticated(false)), []);
 
   if (isLoading) {
     return (
@@ -51,11 +55,9 @@ export default function AppNavigator() {
   return (
     <>
       <Stack.Navigator
-        initialRouteName={isAuthenticated ? 'MainDrawer' : 'Login'}
         screenOptions={{ headerShown: false }}
       >
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="MainDrawer" component={MainDrawer} />
+        {isAuthenticated ? (<Stack.Screen name="MainDrawer" component={MainDrawer} />) : (<Stack.Screen name="Login" component={LoginScreen} />)}
       </Stack.Navigator>
       <TradeNotifications />
     </>

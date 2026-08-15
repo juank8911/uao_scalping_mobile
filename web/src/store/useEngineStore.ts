@@ -1,93 +1,49 @@
-/**
- * useEngineStore.ts
- * Store global de Zustand para el engine de trading.
- * Recibe actualizaciones via WebSocket y expone selectores atómicos
- * para evitar re-renderizados masivos en la UI.
- */
 import { create } from 'zustand';
-import type { SystemStatus, PositionInfo } from '../services/api';
+import type { Candle, OrderInfo, PositionInfo, SystemStatus, GlobalTradeRecord } from '../services/api';
 
+export interface BalanceState { wallet_balance?: number; available_balance?: number; equity?: number; margin_used?: number; unrealized_pnl?: number; realized_pnl?: number; [key: string]: unknown; }
 export interface EngineState {
-  // --- Estado del sistema ---
   status: SystemStatus | null;
   isConnected: boolean;
-  lastUpdated: number;
-
-  // --- Precios en tiempo real (separados para selectores atómicos) ---
-  // key: symbol (ej. 'BTC/USDT:USDT'), value: precio actual
   latestPrices: Record<string, number>;
-
-  // --- Posiciones abiertas indexadas por símbolo ---
   openPositions: Record<string, PositionInfo>;
-
-  // --- Actions ---
+  openOrders: Record<string, OrderInfo>;
+  candles: Record<string, Candle[]>;
+  balance: BalanceState | null;
+  trades: GlobalTradeRecord[];
   setStatus: (status: SystemStatus) => void;
   setConnected: (connected: boolean) => void;
   updatePrice: (symbol: string, price: number) => void;
   updatePosition: (position: PositionInfo) => void;
+  updateOrders: (orders: OrderInfo[]) => void;
+  updateOrder: (order: OrderInfo) => void;
+  updateBalance: (balance: BalanceState) => void;
+  updateCandle: (symbol: string, timeframe: string, candle: Candle) => void;
+  addTrade: (trade: GlobalTradeRecord) => void;
+  applySnapshot: (snapshot: any) => void;
 }
-
+const candleKey = (symbol: string, timeframe: string) => `${symbol}:${timeframe}`;
 export const useEngineStore = create<EngineState>((set) => ({
-  status: null,
-  isConnected: false,
-  lastUpdated: 0,
-  latestPrices: {},
-  openPositions: {},
-
-  setStatus: (status: SystemStatus) =>
-    set((state) => {
-      // Indexar posiciones por símbolo para acceso O(1)
-      const positions: Record<string, PositionInfo> = {};
-      status.open_positions?.forEach((p) => {
-        positions[p.symbol] = p;
-      });
-
-      // Actualizar precios desde latest_prices del status (merge con los existentes)
-      const prices: Record<string, number> = { ...state.latestPrices };
-      if (status.latest_prices) {
-        Object.entries(status.latest_prices).forEach(([sym, price]) => {
-          prices[sym] = price as number;
-        });
-      }
-
-      return {
-        status,
-        openPositions: positions,
-        latestPrices: prices,
-        lastUpdated: Date.now(),
-      };
-    }),
-
-  setConnected: (connected: boolean) => set({ isConnected: connected }),
-
-  updatePrice: (symbol: string, price: number) =>
-    set((state) => ({
-      latestPrices: { ...state.latestPrices, [symbol]: price },
-    })),
-
-  updatePosition: (position: PositionInfo) =>
-    set((state) => ({
-      openPositions: { ...state.openPositions, [position.symbol]: position },
-    })),
+  status: null, isConnected: false, latestPrices: {}, openPositions: {}, openOrders: {}, candles: {}, balance: null, trades: [],
+  setStatus: (status) => set((state) => {
+    const positions = { ...state.openPositions };
+    (status.open_positions || []).forEach((p) => { positions[p.symbol] = p; });
+    const orders = { ...state.openOrders };
+    (status.open_orders || []).forEach((o) => { if (o.id != null) orders[String(o.id)] = o; });
+    const prices = { ...state.latestPrices, ...(status.latest_prices || {}) };
+    return { status, openPositions: positions, openOrders: orders, latestPrices: prices };
+  }),
+  setConnected: (isConnected) => set({ isConnected }),
+  updatePrice: (symbol, price) => set((state) => ({ latestPrices: { ...state.latestPrices, [symbol]: price } })),
+  updatePosition: (position) => set((state) => ({ openPositions: { ...state.openPositions, [position.symbol]: position } })),
+  updateOrders: (orders) => set(() => { const next: Record<string, OrderInfo> = {}; orders.forEach((o) => { if (o.id != null) next[String(o.id)] = o; }); return { openOrders: next }; }),
+  updateOrder: (order) => set((state) => { const next = { ...state.openOrders }; if (order.id != null) { if (order.status === 'CANCELED' || order.status === 'FILLED' || order.status === 'CLOSED') delete next[String(order.id)]; else next[String(order.id)] = order; } return { openOrders: next }; }),
+  updateBalance: (balance) => set({ balance }),
+  updateCandle: (symbol, timeframe, candle) => set((state) => { const key = candleKey(symbol, timeframe); const previous = state.candles[key] || []; const index = previous.findIndex((item) => item.time === candle.time); const next = [...previous]; if (index >= 0) next[index] = candle; else next.push(candle); next.sort((a, b) => a.time - b.time); return { candles: { ...state.candles, [key]: next.slice(-1000) } }; }),
+  addTrade: (trade) => set((state) => ({ trades: [trade, ...state.trades.filter((t) => !(t.symbol === trade.symbol && t.closed_at === trade.closed_at))].slice(0, 500) })),
+  applySnapshot: (snapshot) => set((state) => { const positions: Record<string, PositionInfo> = {}; (snapshot.open_positions || []).forEach((p: PositionInfo) => { positions[p.symbol] = p; }); const orders: Record<string, OrderInfo> = {}; (snapshot.open_orders || []).forEach((o: OrderInfo) => { if (o.id != null) orders[String(o.id)] = o; }); return { status: snapshot, balance: snapshot.balance || state.balance, openPositions: positions, openOrders: orders, latestPrices: { ...state.latestPrices, ...(snapshot.latest_prices || {}) } }; }),
 }));
-
-// ============================================================
-// Selectores atómicos (evitan re-render de todo el componente)
-// Uso: const btcPrice = usePriceSelector('BTC/USDT:USDT');
-// ============================================================
-
-/** Retorna solo el precio de un símbolo específico */
-export const usePriceSelector = (symbol: string) =>
-  useEngineStore((state) => state.latestPrices[symbol]);
-
-/** Retorna solo la posición de un símbolo específico */
-export const usePositionSelector = (symbol: string) =>
-  useEngineStore((state) => state.openPositions[symbol]);
-
-/** Retorna el estado del motor sin los precios (evita rerender por tick) */
-export const useEngineStatus = () =>
-  useEngineStore((state) => state.status);
-
-/** Retorna si el WebSocket está conectado */
-export const useIsConnected = () =>
-  useEngineStore((state) => state.isConnected);
+export const usePriceSelector = (symbol: string) => useEngineStore((state) => state.latestPrices[symbol]);
+export const usePositionSelector = (symbol: string) => useEngineStore((state) => state.openPositions[symbol]);
+export const useEngineStatus = () => useEngineStore((state) => state.status);
+export const useIsConnected = () => useEngineStore((state) => state.isConnected);
