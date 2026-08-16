@@ -65,7 +65,10 @@ export const closePosition = (symbol: string) => fetchWithAuth(`${BASE_URL}/clos
 
 export const getBalance = () => fetchWithAuth(`${BASE_URL}/balance`);
 export const getBalanceHistory = () => fetchWithAuth(`${BASE_URL}/balance/history`);
-export const getGlobalHistory = async (limit = 20): Promise<{ data: GlobalTradeRecord[] }> => { try { const data = await fetchWithAuth<any>(`${BASE_URL}/history?${query({ limit })}`); return { data: Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [] }; } catch (error) { console.warn('Global history unavailable', error); return { data: [] }; } };
+export const getGlobalHistory = async (limit = 20, mode?: string): Promise<{ data: GlobalTradeRecord[] }> => {
+  const data = await fetchWithAuth<any>(`${BASE_URL}/history?${query({ limit, mode })}`, { cache: 'no-store' });
+  return { data: Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [] };
+};
 export const resetPaperBalance = () => fetchWithAuth(`${BASE_URL}/paper_balance/reset`, { method: 'POST', headers: jsonHeaders });
 
 export const getCredentials = () => fetchWithAuth<CredentialResponse[]>(`${API_BASE_URL}/credentials`);

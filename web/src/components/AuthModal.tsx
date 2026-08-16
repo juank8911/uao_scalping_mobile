@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NeoModal } from './NeoModal';
-import { NeoButton, NeoInput } from 'jeikei-design-system';
+import { NeoButton, NeoInput } from '../compat/jeikei-design';
 
 export const AuthModal = () => {
   const [visible, setVisible] = useState(false);
@@ -57,3 +57,4 @@ export const AuthModal = () => {
     </NeoModal>
   );
 };
+

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Activity, LayoutDashboard, Settings, MessageSquare, ChevronRight, ChevronLeft, History as HistoryIcon } from 'lucide-react';
-import { NeoButton } from 'jeikei-design-system';
+import { NeoButton } from '../compat/jeikei-design';
 
 export const RightSidebarNavigation: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -49,3 +49,4 @@ export const RightSidebarNavigation: React.FC = () => {
     </div>
   );
 };
+

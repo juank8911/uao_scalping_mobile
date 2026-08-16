@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
+import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from '../compat/jeikei-design';
 import { getStatus, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory, closePosition } from '../services/api';
 import type { PositionInfo } from '../services/api';
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { useEngineStore } from '../store/useEngineStore';
 import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
-import PriceTicker from '../components/PriceTicker';
+
 
 export default function ChartScreen() {
   const location = useLocation();
@@ -411,8 +411,8 @@ export default function ChartScreen() {
                         <div className="mt-3 bg-black/20 p-3 rounded-lg relative">
                           <div className="absolute top-3 right-3 flex gap-2">
                             <NeoButton
-                              variant="danger"
-                              size="small"
+                              variant="outline"
+                              size="sm"
                               onClick={handleClosePosition}
                               disabled={closingPos}
                             >
@@ -438,7 +438,7 @@ export default function ChartScreen() {
                                 <div key={idx} className="flex flex-row justify-between items-center mb-2">
                                   <NeoBadge
                                     label={ord.type}
-                                    variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'}
+                                    variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'warning'}
                                   />
                                   <span className="text-white/90 text-sm tabular-nums font-mono">
                                     {ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)
@@ -459,7 +459,7 @@ export default function ChartScreen() {
                             <div key={idx} className="flex flex-row justify-between items-center mb-2">
                               <NeoBadge
                                 label={`${ord.side} ${ord.type}`}
-                                variant={ord.side === 'BUY' ? 'success' : 'danger'}
+                                variant={ord.side === 'BUY' ? 'success' : 'warning'}
                               />
                               <span className="text-white/90 text-sm">{ord.price.toFixed(7)} (Cant: {ord.amount})</span>
                             </div>
@@ -483,7 +483,7 @@ export default function ChartScreen() {
                             <div className="flex flex-row items-center mb-1">
                               <NeoBadge
                                 label={trade.side === 'BUY' || trade.side === 'LONG' ? 'LONG' : 'SHORT'}
-                                variant={trade.side === 'BUY' || trade.side === 'LONG' ? 'success' : 'danger'}
+                                variant={trade.side === 'BUY' || trade.side === 'LONG' ? 'success' : 'warning'}
                               />
                               <span className="text-white/40 text-xs ml-2">
                                 {new Date(trade.time * 1000).toLocaleTimeString()}
@@ -547,3 +547,5 @@ export default function ChartScreen() {
     </NeoLayout>
   );
 }
+
+

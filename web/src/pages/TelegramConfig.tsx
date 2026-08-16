@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
+import { useState, useEffect } from 'react';
+import { NeoLayout, NeoCard, NeoBadge, NeoButton } from '../compat/jeikei-design';
 import { CheckCircle, Wifi, WifiOff, RefreshCw, Send } from 'lucide-react';
 
 const API_BASE = '/api/v1/telegram';
@@ -386,7 +386,7 @@ export default function TelegramConfigScreen() {
                         </div>
                         <NeoBadge
                           label={g.is_channel ? 'Canal' : 'Grupo'}
-                          variant={g.is_channel ? 'info' : 'success'}
+                          variant={g.is_channel ? 'accent' : 'success'}
                         />
                       </div>
                       
@@ -474,3 +474,7 @@ export default function TelegramConfigScreen() {
     </NeoLayout>
   );
 }
+
+
+
+

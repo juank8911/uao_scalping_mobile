@@ -1,6 +1,6 @@
 import { getToken, deleteToken, saveToken, notifyAuthRequired } from '../utils/auth';
 
-export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.0.9:8000/api/v1').replace(/\/$/, '');
+export const API_BASE_URL = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000/api/v1').replace(/\/$/, '');
 export const BASE_URL = `${API_BASE_URL}/control`;
 
 export interface Candle { time: any; open: number; high: number; low: number; close: number; volume: number; closed?: boolean; }
@@ -61,3 +61,4 @@ export const deleteCredentials = (id: string | number) => fetchWithAuth(`${API_B
 export const validateCredentials = (id: string | number) => fetchWithAuth(`${API_BASE_URL}/credentials/${id}/validate`, { method: 'POST', headers: jsonHeaders });
 export const apiFetchTelegram = (path: string, options: RequestInit = {}) => fetchWithAuth(`${API_BASE_URL}/telegram${path.startsWith('/') ? path : `/${path}`}`, options);
 export { fetchWithAuth };
+

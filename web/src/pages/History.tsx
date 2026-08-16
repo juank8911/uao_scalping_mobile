@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { NeoLayout, NeoCard, NeoBadge } from 'jeikei-design-system';
+import { useEffect, useState } from 'react';
+import { NeoLayout, NeoCard, NeoBadge } from '../compat/jeikei-design';
 import { getGlobalHistory, type GlobalTradeRecord } from '../services/api';
 
 export default function HistoryScreen() {
   const [history, setHistory] = useState<GlobalTradeRecord[]>([]);
+  const [mode, setMode] = useState<'PAPER_TRADING' | 'LIVE'>('PAPER_TRADING');
   const [isLoading, setIsLoading] = useState(true);
+  const pnlOf = (trade: GlobalTradeRecord) => Number(trade.pnl ?? 0);
 
   const fetchHistory = async () => {
     try {
       // Traemos un límite alto (1000) ya que el backend ahora filtra por las últimas 24 horas automáticamente
-      const data = await getGlobalHistory(1000);
+      const data = await getGlobalHistory(1000, mode);
       setHistory(data.data);
     } catch (e) {
       console.error('Error fetching global history', e);
@@ -19,17 +21,19 @@ export default function HistoryScreen() {
   };
 
   useEffect(() => {
-    fetchHistory();
-  }, []);
+          void fetchHistory();
+          const interval = window.setInterval(() => void fetchHistory(), 5000);
+          return () => window.clearInterval(interval);
+      }, [mode]);
 
   const totalOrders = history.length;
-  const tpOrders = history.filter(t => t.pnl > 0);
-  const slOrders = history.filter(t => t.pnl <= 0);
+  const tpOrders = history.filter(t => pnlOf(t) > 0);
+  const slOrders = history.filter(t => pnlOf(t) <= 0);
   
   const tpCount = tpOrders.length;
   const slCount = slOrders.length;
-  const totalTpUsdt = tpOrders.reduce((sum, t) => sum + t.pnl, 0);
-  const totalSlUsdt = slOrders.reduce((sum, t) => sum + t.pnl, 0);
+  const totalTpUsdt = tpOrders.reduce((sum, t) => sum + pnlOf(t), 0);
+  const totalSlUsdt = slOrders.reduce((sum, t) => sum + pnlOf(t), 0);
 
   return (
     <NeoLayout>
@@ -38,6 +42,11 @@ export default function HistoryScreen() {
           <h1 className="text-2xl font-bold text-white mb-2">Historial de Órdenes</h1>
           <p className="text-white/60 text-sm">Registro de posiciones completadas y operaciones ejecutadas.</p>
         </div>
+
+              <div className="mb-6 flex gap-2 rounded-lg border border-white/10 bg-black/20 p-1">
+                <button type="button" onClick={() => setMode('PAPER_TRADING')} className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold transition ${mode === 'PAPER_TRADING' ? 'bg-[#34d8ff] text-black' : 'text-white/60 hover:text-white'}`}>Paper Trading</button>
+                <button type="button" onClick={() => setMode('LIVE')} className={`flex-1 rounded-md px-4 py-2 text-sm font-semibold transition ${mode === 'LIVE' ? 'bg-[#34d8ff] text-black' : 'text-white/60 hover:text-white'}`}>Real Trading</button>
+              </div>
 
         {!isLoading && history.length > 0 && (
           <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -91,8 +100,8 @@ export default function HistoryScreen() {
                       label={trade.side === 'LONG' || trade.side === 'BUY' || trade.side === 'buy' ? 'LONG' : 'SHORT'}
                       variant={trade.side === 'LONG' || trade.side === 'BUY' || trade.side === 'buy' ? 'success' : 'danger'}
                     />
-                    <div className={`font-bold text-lg ${trade.pnl >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
-                      PNL: {trade.pnl > 0 ? '+' : ''}{trade.pnl.toFixed(2)} USDT
+                    <div className={`font-bold text-lg ${pnlOf(trade) >= 0 ? 'text-[#00ff88]' : 'text-[#ff3366]'}`}>
+                      PNL: {pnlOf(trade) > 0 ? '+' : ''}{pnlOf(trade).toFixed(2)} USDT
                     </div>
                   </div>
                   
@@ -115,3 +124,4 @@ export default function HistoryScreen() {
     </NeoLayout>
   );
 }
+

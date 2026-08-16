@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NeoCard, NeoButton, NeoModal } from 'jeikei-design-system';
+import { NeoCard, NeoButton, NeoModal } from '../compat/jeikei-design';
 import { fetchChartData } from '../services/api';
 import type { PositionInfo } from '../services/api';
 
@@ -97,3 +97,4 @@ export const PositionChartModal: React.FC<PositionChartModalProps> = ({ visible,
     </NeoModal>
   );
 };
+

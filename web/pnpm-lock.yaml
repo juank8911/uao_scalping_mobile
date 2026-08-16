@@ -12,8 +12,8 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3(vite@8.2.1(@types/node@24.13.3)(jiti@2.7.0)(terser@5.50.0)(yaml@2.9.0))
       jeikei-design-system:
-        specifier: file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz
-        version: file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz(expo@57.0.8)(react-dom@19.2.8(react@19.2.8))(react-native-web@0.19.13(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
+        specifier: file:../../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz
+        version: file:../../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz(expo@57.0.8)(react-dom@19.2.8(react@19.2.8))(react-native-web@0.19.13(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)
       lightweight-charts:
         specifier: ^4.2.3
         version: 4.2.3
@@ -1692,8 +1692,8 @@ packages:
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
 
-  jeikei-design-system@file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz:
-    resolution: {integrity: sha512-6kB0tgIGBxA8c5gBak6TVRLV4ad/ffPdzZqw139I8UtbJp/WrnuGN4vVD2/urbpkfNsoZHJj4PYrQFSGadfm8w==, tarball: file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz}
+  jeikei-design-system@file:../../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz:
+    resolution: {integrity: sha512-RL6nFMUt669fQ6repNDm9nPVgxaMQ+pGKurKGi+4dHTiuxu0p0LLs337NPir74xZC6HB8nw9bQ/m2Q3HupZJwg==, tarball: file:../../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz}
     version: 0.2.0
     engines: {node: '>=18.0.0'}
     peerDependencies:
@@ -4576,7 +4576,7 @@ snapshots:
 
   isexe@2.0.0: {}
 
-  jeikei-design-system@file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz(expo@57.0.8)(react-dom@19.2.8(react@19.2.8))(react-native-web@0.19.13(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
+  jeikei-design-system@file:../../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz(expo@57.0.8)(react-dom@19.2.8(react@19.2.8))(react-native-web@0.19.13(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8):
     dependencies:
       clsx: 2.1.1
       expo: 57.0.8(@babel/core@7.29.7(supports-color@8.1.1))(@expo/dom-webview@57.0.1)(react-dom@19.2.8(react@19.2.8))(react-native-web@0.19.13(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-native@0.86.0(@babel/core@7.29.7(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))(react@19.2.8)(supports-color@8.1.1)(typescript@6.0.3)

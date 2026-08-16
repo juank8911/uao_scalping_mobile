@@ -1,6 +1,7 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getStatus, getGlobalHistory } from '../services/api';
 import type { SystemStatus, GlobalTradeRecord } from '../services/api';
+import { useEngineStore } from '../store/useEngineStore';
 
 interface NotificationData {
   id: string;
@@ -21,6 +22,7 @@ export function TradeNotifications() {
       try {
         // 1. Check for new open positions
         const status: SystemStatus = await getStatus();
+        useEngineStore.getState().setStatus(status);
         if (!isMounted) return;
         
         const currentPositionIds = new Set(status.open_positions?.map(p => p.symbol) || []);
@@ -166,3 +168,5 @@ function ToastItem({ notif, onClose, variantStyles }: { notif: NotificationData,
     </div>
   );
 }
+
+

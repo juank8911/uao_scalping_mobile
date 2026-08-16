@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NeoLayout, NeoCard, NeoInput, NeoButton } from 'jeikei-design-system';
+import { NeoLayout, NeoCard, NeoInput, NeoButton } from '../compat/jeikei-design';
 import { login } from '../services/api';
 
 export default function LoginScreen() {
@@ -80,3 +80,4 @@ export default function LoginScreen() {
     </NeoLayout>
   );
 }
+

@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "jeikei-design-system": "file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz",
+    "jeikei-design-system": "file:../../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz",
     "lightweight-charts": "^4.2.3",
     "lucide-react": "^1.28.0",
     "react": "^19.2.8",
@@ -34,3 +34,4 @@
     "vite": "^8.2.0"
   }
 }
+

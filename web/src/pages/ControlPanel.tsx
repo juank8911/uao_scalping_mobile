@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NeoLayout, NeoCard, NeoInput, NeoButton, NeoBadge, NeoModal } from 'jeikei-design-system';
+import { NeoLayout, NeoCard, NeoInput, NeoButton, NeoBadge, NeoModal } from '../compat/jeikei-design';
 import { startEngine, stopEngine, updateConfig, getConfig, getCredentials, saveCredentials, resetPaperBalance } from '../services/api';
 import type { CredentialResponse } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
@@ -348,3 +348,4 @@ export default function ControlPanelScreen() {
     </NeoLayout>
   );
 }
+

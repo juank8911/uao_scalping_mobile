@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
-import { getStatus, startEngine, stopEngine, closePosition } from '../services/api';
+import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from '../compat/jeikei-design';
+import { getStatus, closePosition } from '../services/api';
 import type { PositionInfo } from '../services/api';
-import { authenticateBiometrically } from '../utils/auth';
 import { PositionChartModal } from '../components/PositionChartModal';
 import { useEngineStore, useIsConnected } from '../store/useEngineStore';
 import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
@@ -33,26 +32,6 @@ export default function DashboardScreen() {
     setSelectedSymbol(activeSymbols[0]);
   }
 
-  const handleToggle = async (value: boolean) => {
-    if (value) {
-      const success = await authenticateBiometrically('Confirmar inicio del motor');
-      if (success) {
-        const response = await startEngine();
-        alert(`Start Engine: ${response.message}`);
-        const data = await getStatus();
-        useEngineStore.getState().setStatus(data);
-      }
-    } else {
-      const success = await authenticateBiometrically('Confirmar parada del motor');
-      if (success) {
-        const response = await stopEngine();
-        alert(`Stop Engine: ${response.message}`);
-        const data = await getStatus();
-        useEngineStore.getState().setStatus(data);
-      }
-    }
-  };
-
   return (
     <NeoLayout>
       <div className="p-6 pt-16 md:p-10 pb-32 max-w-4xl mx-auto w-full">
@@ -65,16 +44,17 @@ export default function DashboardScreen() {
         <div className="mb-6 flex flex-col items-center">
           <div className="flex flex-row items-center justify-center gap-4">
             <NeoBadge
-              label={status?.is_running ? 'SYSTEM ONLINE' : 'SYSTEM OFFLINE'}
-              variant={status?.is_running ? 'success' : 'danger'}
+              label="SYSTEM ONLINE"
+              variant="success"
             />
             {/* Custom toggle switch for React web */}
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
                 className="sr-only peer"
-                checked={status?.is_running ?? false}
-                onChange={(e) => handleToggle(e.target.checked)}
+                checked
+                disabled
+                onChange={() => undefined}
               />
               <div className="w-11 h-6 bg-[#3e3e3e] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[#f4f3f4] peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4DA8DA]"></div>
             </label>
@@ -452,3 +432,4 @@ export default function DashboardScreen() {
     </NeoLayout>
   );
 }
+

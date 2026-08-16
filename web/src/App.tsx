@@ -26,18 +26,20 @@ const PrivateRoute = () => {
   useEffect(() => {
     let active = true;
     const validateSession = async () => {
-      if (checkingAuth) { return null; }
+      
   if (!getToken()) { if (active) setCheckingAuth(false); return; }
-      try { await getCurrentUser(); }
+      try { await Promise.race([getCurrentUser(), new Promise((_, reject) => setTimeout(() => reject(new Error("auth timeout")), 5000))]); }
       catch { deleteToken(); navigate('/login'); }
       finally { if (active) setCheckingAuth(false); }
     };
     validateSession();
     const handleUnauthorized = () => { deleteToken(); navigate('/login'); };
     window.addEventListener('unauthorized', handleUnauthorized);
-    return () => { active = false; window.removeEventListener('unauthorized', handleUnauthorized); };
+
+  return () => { active = false; window.removeEventListener('unauthorized', handleUnauthorized); };
   }, [navigate]);
-  if (checkingAuth) { return null; }
+  if (checkingAuth) return <div className="min-h-screen bg-black text-white flex items-center justify-center">Validando sesión...</div>;
+  
   if (!getToken()) {
     return <Navigate to="/login" replace />;
   }
