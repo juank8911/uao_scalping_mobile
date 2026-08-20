@@ -1,18 +1,32 @@
 import { useEffect, useState } from 'react';
 import { NeoLayout, NeoCard, NeoBadge } from '../compat/jeikei-design';
-import { getGlobalHistory, type GlobalTradeRecord } from '../services/api';
+import { getGlobalHistory, getRealHistory, type GlobalTradeRecord } from '../services/api';
 
 export default function HistoryScreen() {
   const [history, setHistory] = useState<GlobalTradeRecord[]>([]);
   const [mode, setMode] = useState<'PAPER_TRADING' | 'LIVE'>('PAPER_TRADING');
   const [isLoading, setIsLoading] = useState(true);
   const pnlOf = (trade: GlobalTradeRecord) => Number(trade.pnl ?? 0);
+  const isValidClosedTrade = (trade: GlobalTradeRecord) => {
+    const entry = Number(trade.entry_price);
+    const exit = Number(trade.exit_price);
+    const hasCoreValues = Boolean(trade.symbol) && Number.isFinite(entry) && entry > 0 && Number.isFinite(exit) && exit > 0 && Boolean(trade.closed_at);
+    if (mode === 'PAPER_TRADING') {
+      return hasCoreValues && trade.execution_mode === 'PAPER_TRADING' && trade.status === 'simulated_closed';
+    }
+    return hasCoreValues && (trade.execution_mode === 'LIVE' || trade.execution_mode === 'REAL');
+  };
+  const fmtPrice = (value: number | null | undefined) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n.toFixed(8) : "—";
+  };
+  const fmtDate = (value: string | null | undefined) => value ? new Date(value).toLocaleString() : "—";
 
   const fetchHistory = async () => {
     try {
       // Traemos un límite alto (1000) ya que el backend ahora filtra por las últimas 24 horas automáticamente
-      const data = await getGlobalHistory(1000, mode);
-      setHistory(data.data);
+      const data = mode === 'LIVE' ? await getRealHistory(48, 100) : await getGlobalHistory(1000, mode);
+      setHistory(data.data.filter(isValidClosedTrade));
     } catch (e) {
       console.error('Error fetching global history', e);
     } finally {
@@ -93,7 +107,7 @@ export default function HistoryScreen() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {history.map((trade, idx) => (
-              <NeoCard key={idx} title={trade.symbol}>
+              <NeoCard key={idx} title={`${trade.symbol} · ${trade.source === "OKX_POSITION_HISTORY" ? "OKX 48h" : "PostgreSQL"}`}>
                 <div className="mt-2 flex flex-col gap-2">
                   <div className="flex justify-between items-center">
                     <NeoBadge
@@ -106,14 +120,15 @@ export default function HistoryScreen() {
                   </div>
                   
                   <div className="bg-black/20 p-3 rounded-lg flex flex-col gap-1 mt-2">
-                    <p className="text-white/90 text-sm"><span className="font-bold text-[#4DA8DA]">Precio Entrada:</span> {trade.entry_price}</p>
-                    <p className="text-white/90 text-sm"><span className="font-bold text-[#4DA8DA]">Precio Salida:</span> {trade.exit_price || 'N/A'}</p>
-                    {trade.tp_price && <p className="text-white/70 text-xs"><span className="font-bold">Take Profit (TP):</span> {trade.tp_price}</p>}
-                    {trade.sl_price && <p className="text-white/70 text-xs"><span className="font-bold">Stop Loss (SL):</span> {trade.sl_price}</p>}
-                    <p className="text-white/70 text-xs"><span className="font-bold">Apalancamiento:</span> {trade.leverage}x</p>
-                    <p className="text-white/50 text-xs mt-2">
-                      Completada: {new Date(trade.closed_at || 0).toLocaleString()}
-                    </p>
+                    <p className="text-white/70 text-xs"><span className="font-bold">Modo:</span> {trade.execution_mode === "LIVE" ? "REAL" : "PAPER"}</p>
+                    <p className="text-white/90 text-sm"><span className="font-bold text-[#4DA8DA]">Entrada:</span> {fmtPrice(trade.entry_price)}</p>
+                    <p className="text-white/90 text-sm"><span className="font-bold text-[#4DA8DA]">Salida:</span> {fmtPrice(trade.exit_price)}</p>
+                    <p className="text-white/90 text-sm"><span className="font-bold text-[#00ff88]">PnL:</span> {pnlOf(trade) >= 0 ? "+" : ""}{pnlOf(trade).toFixed(4)} USDT</p>
+                    <p className="text-white/70 text-xs"><span className="font-bold">TP:</span> {fmtPrice(trade.tp_price)}</p>
+                    <p className="text-white/70 text-xs"><span className="font-bold">SL:</span> {fmtPrice(trade.sl_price)}</p>
+                    <p className="text-white/70 text-xs"><span className="font-bold">Apalancamiento:</span> {trade.leverage ?? "—"}x</p>
+                    <p className="text-white/70 text-xs"><span className="font-bold">Cantidad:</span> {trade.amount ?? "—"}</p>
+                    <p className="text-white/50 text-xs mt-2"><span className="font-bold">Cerrada:</span> {fmtDate(trade.closed_at)}</p>
                   </div>
                 </div>
               </NeoCard>
@@ -124,4 +139,5 @@ export default function HistoryScreen() {
     </NeoLayout>
   );
 }
+
 
