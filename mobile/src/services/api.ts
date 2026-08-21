@@ -50,17 +50,12 @@ export interface SystemStatus {
   open_positions: PositionInfo[];
   open_orders: StandaloneOrderInfo[];
   latest_prices: Record<string, number>;
-  current_investment?: number;
-  current_leverage?: number;
-  current_target_pnl?: number;
 }
 
 export interface UpdateConfig {
   max_concurrent_trades?: number;
   min_profit_target_usdt?: number;
   max_drawdown_usdt?: number;
-  investment_amount_usdt?: number;
-  leverage?: number;
   exchange_id?: string;
   demo_api_key?: string;
   demo_api_secret?: string;
@@ -362,19 +357,4 @@ export const apiFetchTelegram = async (path: string, opts: RequestInit = {}) => 
     throw new Error(err.detail || `Error ${response.status}`);
   }
   return response.json();
-};
-
-export const resetPaperBalance = async (): Promise<any> => {
-  try {
-    const response = await fetchWithAuth(`${BASE_URL}/paper_balance/reset`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    return await response.json();
-  } catch (error) {
-    console.error('Error resetting paper balance:', error);
-    throw error;
-  }
 };

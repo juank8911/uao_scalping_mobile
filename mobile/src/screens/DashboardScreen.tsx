@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, Text, ScrollView, Switch, Alert, TouchableOpacity, FlatList } from 'react-native';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system/native';
 import { NeoModal } from '../components/NeoModal';
-import { getStatus, SystemStatus, startEngine, stopEngine, PositionInfo, closePosition } from '../services/api';
+import { getStatus, SystemStatus, startEngine, stopEngine, PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 import { PositionChartModal } from '../components/PositionChartModal';
 import { PriceTicker } from '../components/PriceTicker';
@@ -16,7 +16,6 @@ export default function DashboardScreen() {
   const [isConnected, setIsConnected] = useState<boolean>(true);
   const [chartModalVisible, setChartModalVisible] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<PositionInfo | null>(null);
-  const [closingSymbol, setClosingSymbol] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -102,27 +101,6 @@ export default function DashboardScreen() {
             />
           )}
         </View>
-
-        <NeoCard
-          title="Configuración Activa"
-          value={status?.is_running ? 'En Memoria' : 'Inactivo'}
-          trend={{ value: 'CONFIG', direction: status?.is_running ? 'up' : 'down' }}
-        >
-          <View style={styles.balanceDetails}>
-            <Text style={styles.text}>Inversión:</Text>
-            <Text style={styles.textBold}>{status?.current_investment ? `${status.current_investment} USDT` : '---'}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <Text style={styles.text}>Apalancamiento:</Text>
-            <Text style={styles.textBold}>{status?.current_leverage ? `${status.current_leverage}x` : '---'}</Text>
-          </View>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <Text style={styles.text}>PnL Objetivo:</Text>
-            <Text style={[styles.textBold, { color: '#00ff88' }]}>{status?.current_target_pnl ? `${status.current_target_pnl} USDT` : '---'}</Text>
-          </View>
-        </NeoCard>
-
-        <View style={{ height: 24 }} />
 
         <NeoCard
           title="Global Balance & PnL"
@@ -226,21 +204,6 @@ export default function DashboardScreen() {
           const position = status.open_positions?.find((p) => p.symbol === symbol);
           const standaloneOrders = status.open_orders?.filter(o => o.symbol === symbol) || [];
           
-          const handleClosePosition = async (sym: string) => {
-            setClosingSymbol(sym);
-            try {
-              await closePosition(sym);
-              const data = await getStatus();
-              setGlobalStatus(data);
-              Alert.alert('Éxito', 'Posición cerrada');
-            } catch (err) {
-              console.error(err);
-              Alert.alert('Error', 'Error cerrando la posición.');
-            } finally {
-              setClosingSymbol(null);
-            }
-          };
-          
           return (
             <View key={symbol} style={{ marginBottom: 16 }}>
               <TouchableOpacity
@@ -302,23 +265,6 @@ export default function DashboardScreen() {
                         })}
                       </View>
                     )}
-                    
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <NeoButton variant="secondary" size="small" onPress={() => { setSelectedPosition(position); setChartModalVisible(true); }}>
-                          Ver Gráfico
-                        </NeoButton>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <NeoButton 
-                          variant="danger" 
-                          size="small" 
-                          onPress={() => handleClosePosition(position.symbol)}
-                        >
-                          {closingSymbol === position.symbol ? 'Cerrando...' : 'Cerrar'}
-                        </NeoButton>
-                      </View>
-                    </View>
                   </View>
                 ) : standaloneOrders.length > 0 ? (
                   <View style={styles.positionDetails}>

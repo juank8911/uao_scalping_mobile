@@ -110,16 +110,16 @@ export const login = async (username: string, password: string): Promise<any> =>
 
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getToken();
-  const headers: any = {
+  const headers: any = { 
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0',
-    ...options.headers
+    ...options.headers 
   };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-
+  
   let finalUrl = url;
   if (!options.method || options.method === 'GET') {
     const separator = url.includes('?') ? '&' : '?';
@@ -127,7 +127,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
   }
 
   const response = await fetch(finalUrl, { ...options, headers });
-
+  
   if (response.status === 401) {
     deleteToken();
     window.dispatchEvent(new Event('unauthorized'));
@@ -213,7 +213,7 @@ export const getStatus = async (): Promise<SystemStatus> => {
     },
   });
   if (response.ok) {
-    return await response.json();
+      return await response.json();
   }
   throw new Error('Network error');
 };
@@ -292,7 +292,7 @@ export const saveCredentials = async (
     passphrase,
     is_active: true
   };
-
+  
   const response = await fetchWithAuth(`${API_BASE_URL}/credentials/`, {
     method: 'POST',
     headers: {
@@ -300,7 +300,7 @@ export const saveCredentials = async (
     },
     body: JSON.stringify(payload),
   });
-
+  
   if (response.ok) {
     return await response.json();
   }
@@ -329,7 +329,7 @@ export interface GlobalTradeRecord {
   leverage: number;
 }
 
-export const getGlobalHistory = async (limit: number = 20): Promise<{ data: GlobalTradeRecord[] }> => {
+export const getGlobalHistory = async (limit: number = 20): Promise<{data: GlobalTradeRecord[]}> => {
   const response = await fetchWithAuth(`${BASE_URL}/history?limit=${limit}`, {
     method: 'GET',
     headers: {

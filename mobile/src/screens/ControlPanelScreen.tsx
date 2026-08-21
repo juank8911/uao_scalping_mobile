@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Alert, ScrollView, TouchableOpacity, FlatList } from 'react-native';
 import { NeoLayout, NeoCard, NeoInput, NeoButton, NeoBadge } from 'jeikei-design-system/native';
 import { NeoModal } from '../components/NeoModal';
-import { startEngine, stopEngine, updateConfig, getConfig, getCredentials, saveCredentials, resetPaperBalance, ConfigResponse, CredentialResponse } from '../services/api';
+import { startEngine, stopEngine, updateConfig, getConfig, getCredentials, saveCredentials, ConfigResponse, CredentialResponse } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
 
 export default function ControlPanelScreen() {
@@ -13,8 +13,6 @@ export default function ControlPanelScreen() {
   const [maxTrades, setMaxTrades] = useState('5');
   const [profitTarget, setProfitTarget] = useState('0.5');
   const [maxDrawdown, setMaxDrawdown] = useState('50');
-  const [investmentAmount, setInvestmentAmount] = useState('50');
-  const [leverage, setLeverage] = useState('20');
   
   const [demoApiKey, setDemoApiKey] = useState('');
   const [demoApiSecret, setDemoApiSecret] = useState('');
@@ -45,8 +43,6 @@ export default function ControlPanelScreen() {
         setMaxTrades(configData.max_concurrent_trades.toString());
         setProfitTarget(configData.min_profit_target_usdt.toString());
         setMaxDrawdown(configData.max_drawdown_usdt.toString());
-        setInvestmentAmount(configData.investment_amount_usdt?.toString() || '50');
-        setLeverage(configData.leverage?.toString() || '20');
         setExecutionMode(configData.execution_mode);
         
         setCredentials(credsData);
@@ -82,18 +78,6 @@ export default function ControlPanelScreen() {
     }
   };
 
-  const handleResetPaper = async () => {
-    const success = await authenticateBiometrically('Confirmar reinicio de Paper Trading');
-    if (success) {
-      try {
-        const res = await resetPaperBalance();
-        Alert.alert('Éxito', res.message);
-      } catch (err) {
-        Alert.alert('Error', 'Error al reiniciar Paper Trading');
-      }
-    }
-  };
-
   const handleUpdateConfig = async () => {
     const success = await authenticateBiometrically('Confirmar cambios de configuración');
     if (success) {
@@ -103,8 +87,6 @@ export default function ControlPanelScreen() {
           max_concurrent_trades: parseInt(maxTrades, 10),
           min_profit_target_usdt: parseFloat(profitTarget),
           max_drawdown_usdt: parseFloat(maxDrawdown),
-          investment_amount_usdt: parseFloat(investmentAmount),
-          leverage: parseInt(leverage, 10),
           execution_mode: executionMode,
           exchange_id: exchangeId
         });
@@ -168,8 +150,6 @@ export default function ControlPanelScreen() {
                 {renderSummaryRow('Max Concurrent Trades', maxTrades)}
                 {renderSummaryRow('Min Profit Target', `${profitTarget} USDT`)}
                 {renderSummaryRow('Max Drawdown', `${maxDrawdown} USDT`)}
-                {renderSummaryRow('Investment Amount', `${investmentAmount} USDT`)}
-                {renderSummaryRow('Leverage', `${leverage}x`)}
                 
                 <View style={{ height: 16 }} />
                 <Text style={styles.sectionHeader}>API Credentials Status</Text>
@@ -186,10 +166,6 @@ export default function ControlPanelScreen() {
                 <View style={{ height: 24 }} />
                 <NeoButton variant="outline" size="md" onPress={() => setIsEditing(true)}>
                   Editar Configuración
-                </NeoButton>
-                <View style={{ height: 16 }} />
-                <NeoButton variant="secondary" size="md" onPress={handleResetPaper}>
-                  Reiniciar Paper Trading e Historial
                 </NeoButton>
               </View>
             )}
@@ -252,22 +228,6 @@ export default function ControlPanelScreen() {
                 placeholder="e.g. 50"
                 value={maxDrawdown}
                 onChangeText={setMaxDrawdown}
-                keyboardType="numeric"
-              />
-              <View style={{ height: 16 }} />
-              <NeoInput
-                label="Investment Amount (USDT)"
-                placeholder="e.g. 2.5"
-                value={investmentAmount}
-                onChangeText={setInvestmentAmount}
-                keyboardType="numeric"
-              />
-              <View style={{ height: 16 }} />
-              <NeoInput
-                label="Leverage (x)"
-                placeholder="e.g. 30"
-                value={leverage}
-                onChangeText={setLeverage}
                 keyboardType="numeric"
               />
               
