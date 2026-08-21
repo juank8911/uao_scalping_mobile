@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, Outlet, useLocation } from 'react-router-dom';
-import { Activity, LayoutDashboard, Settings, MessageSquare } from 'lucide-react';
+import { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, Outlet } from 'react-router-dom';
+
 import { AuthModal } from './components/AuthModal';
 
 import LoginScreen from './pages/Login';

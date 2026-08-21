@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
 import { CheckCircle, Wifi, WifiOff, RefreshCw, Send } from 'lucide-react';
 
@@ -385,8 +385,8 @@ export default function TelegramConfigScreen() {
                           <span className="text-sm font-medium text-left">{g.title}</span>
                         </div>
                         <NeoBadge
-                          label={g.is_channel ? 'Canal' : 'Grupo'}
-                          variant={g.is_channel ? 'info' : 'success'}
+                          children={g.is_channel ? 'Canal' : 'Grupo'}
+                          variant={g.is_channel ? 'accent' : 'success'}
                         />
                       </div>
                       

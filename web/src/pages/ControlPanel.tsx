@@ -12,6 +12,7 @@ export default function ControlPanelScreen() {
   const [maxTrades, setMaxTrades] = useState('5');
   const [profitTarget, setProfitTarget] = useState('0.5');
   const [maxDrawdown, setMaxDrawdown] = useState('50');
+  const [maxSlLoss, setMaxSlLoss] = useState('2');
   const [investmentAmount, setInvestmentAmount] = useState('50');
   const [leverage, setLeverage] = useState('20');
   
@@ -43,6 +44,7 @@ export default function ControlPanelScreen() {
         setMaxTrades(configData.max_concurrent_trades.toString());
         setProfitTarget(configData.min_profit_target_usdt.toString());
         setMaxDrawdown(configData.max_drawdown_usdt.toString());
+        setMaxSlLoss(configData.max_sl_loss_usdt?.toString() || '2');
         setInvestmentAmount(configData.investment_amount_usdt?.toString() || '50');
         setLeverage(configData.leverage?.toString() || '20');
         setExecutionMode(configData.execution_mode);
@@ -101,6 +103,7 @@ export default function ControlPanelScreen() {
           max_concurrent_trades: parseInt(maxTrades, 10),
           min_profit_target_usdt: parseFloat(profitTarget),
           max_drawdown_usdt: parseFloat(maxDrawdown),
+          max_sl_loss_usdt: parseFloat(maxSlLoss),
           investment_amount_usdt: parseFloat(investmentAmount),
           leverage: parseInt(leverage, 10),
           execution_mode: executionMode,
@@ -163,6 +166,7 @@ export default function ControlPanelScreen() {
                 {renderSummaryRow('Max Concurrent Trades', maxTrades)}
                 {renderSummaryRow('Min Profit Target', `${profitTarget} USDT`)}
                 {renderSummaryRow('Max Drawdown', `${maxDrawdown} USDT`)}
+                {renderSummaryRow('Max SL Loss', `${maxSlLoss} USDT`)}
                 {renderSummaryRow('Investment Amount', `${investmentAmount} USDT`)}
                 {renderSummaryRow('Leverage', `${leverage}x`)}
                 
@@ -242,6 +246,15 @@ export default function ControlPanelScreen() {
                 value={maxDrawdown}
                 onChange={(e: any) => setMaxDrawdown(e.target.value)}
                 type="number"
+              />
+              <NeoInput
+                label="Max SL Loss (USDT)"
+                placeholder="e.g. 2"
+                value={maxSlLoss}
+                onChange={(e: any) => setMaxSlLoss(e.target.value)}
+                type="number"
+                min="0.01"
+                step="0.01"
               />
               <NeoInput
                 label="Investment Amount (USDT)"

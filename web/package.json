@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "jeikei-design-system": "file:../../UAO_scalpin_style/jeikei-design-system/jeikei-design-system-0.2.0.tgz",
+    "jeikei-design-system": "git+https://github.com/jikey8911/jeikei-design-system.git",
     "lightweight-charts": "^4.2.3",
     "lucide-react": "^1.28.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.11.0",
     "zustand": "^5.0.14"
@@ -23,8 +23,8 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.13.3",
-    "@types/react": "^19.2.17",
-    "@types/react-dom": "^19.2.3",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^6.0.4",
     "autoprefixer": "^10.5.4",
     "oxlint": "^1.75.0",

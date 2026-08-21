@@ -2,12 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
 import { getStatus, getCredentials, fetchChartData, fetchChartTrades, fetchChartHistory, closePosition } from '../services/api';
-import type { PositionInfo } from '../services/api';
+import type { ChartHistoryRecord, PositionInfo } from '../services/api';
+
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { useEngineStore } from '../store/useEngineStore';
 import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
-import PriceTicker from '../components/PriceTicker';
 
 export default function ChartScreen() {
   const location = useLocation();
@@ -23,7 +23,11 @@ export default function ChartScreen() {
   const [isDropdownVisible, setDropdownVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [closingPos, setClosingPos] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<ChartHistoryRecord[]>([]);
+
+  const openPositionSymbols = (status?.open_positions ?? [])
+    .map((position) => position.symbol)
+    .filter((symbol, index, symbols) => symbols.indexOf(symbol) === index);
 
   // --- WebSocket global para el símbolo seleccionado ---
   useEngineWebSocket(selectedSymbol);
@@ -37,19 +41,20 @@ export default function ChartScreen() {
     let isMounted = true;
     const fetchData = async () => {
       await getCredentials();
-      if (!isMounted) return;
+      if (!isMounted || !status) return;
 
-      if (!selectedSymbol && status?.active_symbols?.length) {
-        setSelectedSymbol(status.active_symbols[0]);
-      } else if (!selectedSymbol) {
-        setSelectedSymbol('BTC/USDT:USDT');
+      const nextSymbol = selectedSymbol && openPositionSymbols.includes(selectedSymbol)
+        ? selectedSymbol
+        : (openPositionSymbols[0] ?? null);
+      if (nextSymbol !== selectedSymbol) {
+        setSelectedSymbol(nextSymbol);
       }
       setIsLoading(false);
     };
 
     fetchData();
     return () => { isMounted = false; };
-  }, [selectedSymbol, status?.active_symbols?.length]);
+  }, [selectedSymbol, status, openPositionSymbols.join('|')]);
 
   // Init chart
   useEffect(() => {
@@ -93,7 +98,8 @@ export default function ChartScreen() {
           precision: 7,
           minMove: 0.0000001,
         },
-        autoscaleInfoProvider: (original) => {
+                autoscaleInfoProvider: (original: () => any) => {
+
           const res = original();
           if (res && res.priceRange) {
             let minPrice = res.priceRange.minValue;
@@ -335,9 +341,11 @@ export default function ChartScreen() {
   const contractSizeActive = activePosition?.contractSize || 1;
 
   const livePnl = activePosition
-    ? isShortActive
-      ? (activePosition.entryPrice - activePosition.markPrice) * activePosition.contracts * contractSizeActive
-      : (activePosition.markPrice - activePosition.entryPrice) * activePosition.contracts * contractSizeActive
+    ? (Number.isFinite(activePosition.unrealizedPnl)
+      ? activePosition.unrealizedPnl
+      : (isShortActive
+        ? (activePosition.entryPrice - activePosition.markPrice) * activePosition.contracts * contractSizeActive
+        : (activePosition.markPrice - activePosition.entryPrice) * activePosition.contracts * contractSizeActive))
     : 0;
 
   const handleClosePosition = async () => {
@@ -398,14 +406,16 @@ export default function ChartScreen() {
             <div className="flex-1 p-6 overflow-y-auto">
               {(() => {
                 const isShort = activePosition?.side?.toLowerCase() === 'short';
-                const calculateExpectedPnl = (targetPrice: number) => {
+                                  const calculateExpectedPnl = (targetPrice: number) => {
                   if (!activePosition) return 0;
-                  return (activePosition.contracts || 0) * (
+                  const contractSize = activePosition.contractSize || 1;
+                  return (activePosition.contracts || 0) * contractSize * (
                     isShort
                       ? (activePosition.entryPrice - targetPrice)
                       : (targetPrice - activePosition.entryPrice)
                   );
                 };
+
                 return (
                   <>
               <NeoCard
@@ -416,8 +426,9 @@ export default function ChartScreen() {
                   <div className="mt-3 bg-black/20 p-3 rounded-lg relative">
                     <div className="absolute top-3 right-3 flex gap-2">
                       <NeoButton
-                        variant="danger"
-                        size="small"
+                                                variant="secondary"
+                        size="sm"
+
                         onClick={handleClosePosition}
                         disabled={closingPos}
                       >
@@ -441,10 +452,10 @@ export default function ChartScreen() {
                         <p className="font-bold text-[#34d8ff] mb-2">Órdenes Pendientes de Salida:</p>
                         {activePosition.orders.map((ord, idx) => (
                           <div key={idx} className="flex flex-row justify-between items-center mb-2">
-                            <NeoBadge
-                              label={ord.type}
-                              variant={ord.type === 'TAKE_PROFIT' ? 'success' : 'danger'}
-                            />
+                                                        <span className={`px-2 py-1 rounded text-xs font-bold ${ord.type === 'TAKE_PROFIT' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
+                              {ord.type}
+                            </span>
+
                             <span className="text-white/90 text-sm tabular-nums font-mono">
                               {ord.price.toFixed(7)} ({ord.distance_pct.toFixed(2)}%)
                               {' | '}
@@ -462,10 +473,10 @@ export default function ChartScreen() {
                     <p className="font-bold text-[#34d8ff] mb-2">Órdenes de Entrada Abiertas:</p>
                     {standaloneOrders.map((ord, idx) => (
                       <div key={idx} className="flex flex-row justify-between items-center mb-2">
-                        <NeoBadge
-                          label={`${ord.side} ${ord.type}`}
-                          variant={ord.side === 'BUY' ? 'success' : 'danger'}
-                        />
+                                                <NeoBadge variant={ord.side === 'BUY' ? 'success' : 'danger'}>
+                          {`${ord.side} ${ord.type}`}
+                        </NeoBadge>
+
                         <span className="text-white/90 text-sm">{ord.price.toFixed(7)} (Cant: {ord.amount})</span>
                       </div>
                     ))}
@@ -486,10 +497,10 @@ export default function ChartScreen() {
                         <div key={idx} className={`flex flex-row justify-between pb-3 ${idx !== history.length - 1 ? 'border-b border-[#34d8ff]/10' : ''}`}>
                           <div className="flex-1">
                             <div className="flex flex-row items-center mb-1">
-                              <NeoBadge
-                                label={trade.side === 'BUY' || trade.side === 'LONG' ? 'LONG' : 'SHORT'}
-                                variant={trade.side === 'BUY' || trade.side === 'LONG' ? 'success' : 'danger'}
-                              />
+                                                            <NeoBadge variant={trade.side === 'BUY' || trade.side === 'LONG' ? 'success' : 'danger'}>
+                                {trade.side === 'BUY' || trade.side === 'LONG' ? 'LONG' : 'SHORT'}
+                              </NeoBadge>
+
                               <span className="text-white/40 text-xs ml-2">
                                 {new Date(trade.time * 1000).toLocaleTimeString()}
                               </span>
@@ -527,9 +538,10 @@ export default function ChartScreen() {
           </NeoButton>
         }
       >
-        {status?.active_symbols && status.active_symbols.length > 0 ? (
+                {openPositionSymbols.length > 0 ? (
           <div className="flex flex-col">
-            {status.active_symbols.map((item) => (
+            {openPositionSymbols.map((item) => (
+
               <button
                 key={item}
                 className={`py-3.5 border-b px-3 rounded-lg transition-colors text-center ${selectedSymbol === item
@@ -545,9 +557,10 @@ export default function ChartScreen() {
               </button>
             ))}
           </div>
-        ) : (
-          <p className="text-white/70 text-xs mt-2 text-center">Ningún símbolo activo disponible.</p>
+                ) : (
+          <p className="text-white/70 text-xs mt-2 text-center">No hay posiciones abiertas disponibles.</p>
         )}
+
       </NeoModal>
     </NeoLayout>
   );

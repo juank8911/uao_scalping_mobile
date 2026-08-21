@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
+
 import { getStatus, getGlobalHistory } from '../services/api';
 import type { SystemStatus, GlobalTradeRecord } from '../services/api';
 

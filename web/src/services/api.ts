@@ -57,6 +57,7 @@ export interface UpdateConfig {
   max_concurrent_trades?: number;
   min_profit_target_usdt?: number;
   max_drawdown_usdt?: number;
+  max_sl_loss_usdt?: number;
   investment_amount_usdt?: number;
   leverage?: number;
   exchange_id?: string;
@@ -73,6 +74,7 @@ export interface ConfigResponse {
   max_concurrent_trades: number;
   min_profit_target_usdt: number;
   max_drawdown_usdt: number;
+  max_sl_loss_usdt: number;
   leverage: number;
   investment_amount_usdt: number;
   execution_mode: string;
@@ -192,13 +194,16 @@ export const fetchChartTrades = async (symbol: string) => {
   }
 };
 
-export const fetchChartHistory = async (symbol: string) => {
+export const fetchChartHistory = async (symbol: string): Promise<ChartHistoryRecord[]> => {
   try {
     const response = await fetchWithAuth(`${BASE_URL}/chart/history?symbol=${encodeURIComponent(symbol)}&limit=6`, {
       method: 'GET',
     });
+    if (!response.ok) throw new Error(`Chart history HTTP ${response.status}`);
     const data = await response.json();
-    return data.data || [];
+    return (Array.isArray(data.data) ? data.data : [])
+      .map((raw: unknown) => normalizeChartHistoryRecord(raw))
+      .filter((record: ChartHistoryRecord | null): record is ChartHistoryRecord => record !== null);
   } catch (error) {
     console.error('Error fetching chart history:', error);
     return [];
@@ -252,6 +257,7 @@ export const getConfig = async (): Promise<ConfigResponse> => {
       max_concurrent_trades: 5,
       min_profit_target_usdt: 0.5,
       max_drawdown_usdt: 50,
+      max_sl_loss_usdt: 2,
       leverage: 15,
       investment_amount_usdt: 50,
       execution_mode: 'PAPER_TRADING'
@@ -317,6 +323,15 @@ export const closePosition = async (symbol: string) => {
   });
 };
 
+export interface ChartHistoryRecord {
+  id?: string;
+  time: number;
+  side: string;
+  entryPrice: number;
+  exitPrice: number;
+  pnl: number;
+}
+
 export interface GlobalTradeRecord {
   symbol: string;
   side: string;
@@ -329,6 +344,49 @@ export interface GlobalTradeRecord {
   leverage: number;
 }
 
+const finiteNumber = (value: unknown, fallback = 0): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const epochSeconds = (value: unknown): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 10_000_000_000 ? value / 1000 : value;
+  }
+  const parsed = Date.parse(String(value ?? ''));
+  return Number.isFinite(parsed) ? parsed / 1000 : 0;
+};
+
+const normalizeChartHistoryRecord = (raw: any): ChartHistoryRecord | null => {
+  if (!raw || typeof raw !== 'object') return null;
+  const time = epochSeconds(raw.time ?? raw.closed_at ?? raw.closedAt);
+  return {
+    id: raw.id !== undefined ? String(raw.id) : undefined,
+    time,
+    side: String(raw.side ?? raw.direction ?? '').toUpperCase(),
+    entryPrice: finiteNumber(raw.entryPrice ?? raw.entry_price),
+    exitPrice: finiteNumber(raw.exitPrice ?? raw.exit_price),
+    pnl: finiteNumber(raw.pnl ?? raw.realizedPnl),
+  };
+};
+
+const normalizeGlobalTradeRecord = (raw: any): GlobalTradeRecord | null => {
+  if (!raw || typeof raw !== 'object' || !raw.symbol) return null;
+  const closedAt = raw.closed_at ?? raw.closedAt;
+  const time = epochSeconds(raw.time ?? closedAt);
+  return {
+    symbol: String(raw.symbol),
+    side: String(raw.side ?? raw.direction ?? '').toUpperCase(),
+    entry_price: finiteNumber(raw.entry_price ?? raw.entryPrice),
+    exit_price: finiteNumber(raw.exit_price ?? raw.exitPrice),
+    tp_price: raw.tp_price !== undefined || raw.tpPrice !== undefined ? finiteNumber(raw.tp_price ?? raw.tpPrice) : undefined,
+    sl_price: raw.sl_price !== undefined || raw.slPrice !== undefined ? finiteNumber(raw.sl_price ?? raw.slPrice) : undefined,
+    pnl: finiteNumber(raw.pnl ?? raw.realizedPnl),
+    closed_at: closedAt ? String(closedAt) : (time > 0 ? new Date(time * 1000).toISOString() : ''),
+    leverage: finiteNumber(raw.leverage),
+  };
+};
+
 export const getGlobalHistory = async (limit: number = 20): Promise<{data: GlobalTradeRecord[]}> => {
   const response = await fetchWithAuth(`${BASE_URL}/history?limit=${limit}`, {
     method: 'GET',
@@ -336,10 +394,12 @@ export const getGlobalHistory = async (limit: number = 20): Promise<{data: Globa
       'Content-Type': 'application/json',
     },
   });
-  if (response.ok) {
-    return await response.json();
-  }
-  throw new Error('Network error fetching history');
+  if (!response.ok) throw new Error(`History HTTP ${response.status}`);
+  const payload = await response.json();
+  const records = (Array.isArray(payload.data) ? payload.data : [])
+    .map((raw: unknown) => normalizeGlobalTradeRecord(raw))
+    .filter((record: GlobalTradeRecord | null): record is GlobalTradeRecord => record !== null);
+  return { data: records };
 };
 
 export const resetPaperBalance = async (): Promise<any> => {
