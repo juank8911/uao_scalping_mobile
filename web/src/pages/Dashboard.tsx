@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
+import { NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
+import { SafeNeoLayout } from '../components/SafeNeoLayout';
 import { getStatus, startEngine, stopEngine, closePosition } from '../services/api';
 import type { PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
@@ -55,7 +56,7 @@ export default function DashboardScreen() {
   };
 
   return (
-    <NeoLayout>
+    <SafeNeoLayout>
       <div className="p-6 pt-16 md:p-10 pb-32 max-w-4xl mx-auto w-full">
         {!isConnected && (
           <div className="bg-[#ef5350] p-3 rounded-lg mb-4 text-center">
@@ -456,6 +457,6 @@ export default function DashboardScreen() {
           <p className="text-white/70 text-xs mt-2">Ningún símbolo activo disponible.</p>
         )}
       </NeoModal>
-    </NeoLayout>
+    </SafeNeoLayout>
   );
 }

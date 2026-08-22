@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { NeoLayout, NeoCard, NeoInput, NeoButton, NeoBadge, NeoModal } from 'jeikei-design-system';
+import { NeoCard, NeoInput, NeoButton, NeoBadge, NeoModal } from 'jeikei-design-system';
+import { SafeNeoLayout } from '../components/SafeNeoLayout';
 import { startEngine, stopEngine, updateConfig, getConfig, getCredentials, saveCredentials, resetPaperBalance } from '../services/api';
 import type { CredentialResponse } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
@@ -136,7 +137,7 @@ export default function ControlPanelScreen() {
   );
 
   return (
-    <NeoLayout>
+    <SafeNeoLayout>
       <div className="p-6 pt-16 md:p-10 pb-32 max-w-4xl mx-auto w-full">
         <NeoCard title="Engine Control" value="" trend={{ value: 'DANGER ZONE', direction: 'down' }}>
           <div className="flex flex-row mt-4 justify-between gap-4">
@@ -358,6 +359,6 @@ export default function ControlPanelScreen() {
           </div>
         </NeoModal>
       </div>
-    </NeoLayout>
+    </SafeNeoLayout>
   );
 }

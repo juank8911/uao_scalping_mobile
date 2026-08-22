@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { NeoLayout, NeoCard, NeoBadge } from 'jeikei-design-system';
+import { NeoCard, NeoBadge } from 'jeikei-design-system';
+import { SafeNeoLayout } from '../components/SafeNeoLayout';
 import { getGlobalHistory, type GlobalTradeRecord } from '../services/api';
 
 const HISTORY_REFRESH_MS = 5_000;
@@ -71,7 +72,7 @@ export default function HistoryScreen() {
   const totalNetPnl = totalTpUsdt + totalSlUsdt;
 
   return (
-    <NeoLayout>
+    <SafeNeoLayout>
       <div className="p-6 pt-16 md:p-10 pb-32 max-w-4xl mx-auto w-full">
         <div className="mb-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -162,6 +163,6 @@ export default function HistoryScreen() {
           </div>
         )}
       </div>
-    </NeoLayout>
+    </SafeNeoLayout>
   );
 }

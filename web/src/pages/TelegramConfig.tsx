@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
+import { NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
+import { SafeNeoLayout } from '../components/SafeNeoLayout';
 import { CheckCircle, Wifi, WifiOff, RefreshCw, Send } from 'lucide-react';
 
 const API_BASE = '/api/v1/telegram';
@@ -206,7 +207,7 @@ export default function TelegramConfigScreen() {
   const msgColor = message?.type === 'error' ? 'text-red-400' : message?.type === 'success' ? 'text-green-400' : 'text-[#34d8ff]';
 
   return (
-    <NeoLayout>
+    <SafeNeoLayout>
       <div className="flex flex-col flex-1 pt-16 pb-28 h-full max-w-2xl mx-auto w-full px-4">
         {/* Header */}
         <div className="flex flex-row justify-between items-center mb-6">
@@ -471,6 +472,6 @@ export default function TelegramConfigScreen() {
           </NeoCard>
         )}
       </div>
-    </NeoLayout>
+    </SafeNeoLayout>
   );
 }
