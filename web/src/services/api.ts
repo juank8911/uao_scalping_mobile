@@ -332,6 +332,8 @@ export interface ChartHistoryRecord {
   pnl: number;
 }
 
+export type ExecutionMode = 'PAPER_TRADING' | 'LIVE' | 'TESTNET';
+
 export interface GlobalTradeRecord {
   symbol: string;
   side: string;
@@ -342,6 +344,7 @@ export interface GlobalTradeRecord {
   pnl: number;
   closed_at: string;
   leverage: number;
+  execution_mode?: ExecutionMode;
 }
 
 const finiteNumber = (value: unknown, fallback = 0): number => {
@@ -384,16 +387,25 @@ const normalizeGlobalTradeRecord = (raw: any): GlobalTradeRecord | null => {
     pnl: finiteNumber(raw.pnl ?? raw.realizedPnl),
     closed_at: closedAt ? String(closedAt) : (time > 0 ? new Date(time * 1000).toISOString() : ''),
     leverage: finiteNumber(raw.leverage),
+    execution_mode: raw.execution_mode === 'LIVE' || raw.execution_mode === 'TESTNET' || raw.execution_mode === 'PAPER_TRADING'
+      ? raw.execution_mode
+      : undefined,
   };
 };
 
-export const getGlobalHistory = async (limit: number = 20): Promise<{data: GlobalTradeRecord[]}> => {
-  const response = await fetchWithAuth(`${BASE_URL}/history?limit=${limit}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
+export const getGlobalHistory = async (
+  limit: number = 20,
+  executionMode: ExecutionMode = 'PAPER_TRADING',
+): Promise<{data: GlobalTradeRecord[]}> => {
+  const response = await fetchWithAuth(
+    `${BASE_URL}/history?limit=${limit}&execution_mode=${encodeURIComponent(executionMode)}`,
+    {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     },
-  });
+  );
   if (!response.ok) throw new Error(`History HTTP ${response.status}`);
   const payload = await response.json();
   const records = (Array.isArray(payload.data) ? payload.data : [])
