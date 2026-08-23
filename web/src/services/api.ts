@@ -345,6 +345,8 @@ export interface GlobalTradeRecord {
   closed_at: string;
   leverage: number;
   execution_mode?: ExecutionMode;
+  close_reason?: string;
+  movement_state?: string;
 }
 
 const finiteNumber = (value: unknown, fallback = 0): number => {
@@ -389,6 +391,12 @@ const normalizeGlobalTradeRecord = (raw: any): GlobalTradeRecord | null => {
     leverage: finiteNumber(raw.leverage),
     execution_mode: raw.execution_mode === 'LIVE' || raw.execution_mode === 'TESTNET' || raw.execution_mode === 'PAPER_TRADING'
       ? raw.execution_mode
+      : undefined,
+    close_reason: raw.close_reason ?? raw.closeReason
+      ? String(raw.close_reason ?? raw.closeReason).toUpperCase()
+      : undefined,
+    movement_state: raw.movement_state ?? raw.movementState
+      ? String(raw.movement_state ?? raw.movementState).toUpperCase()
       : undefined,
   };
 };

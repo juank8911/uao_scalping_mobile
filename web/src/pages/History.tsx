@@ -87,13 +87,20 @@ export default function HistoryScreen() {
   const lastUpdated = lastUpdatedByMode[activeMode];
 
   const totalOrders = history.length;
-  const tpOrders = history.filter((trade) => trade.pnl > 0);
-  const slOrders = history.filter((trade) => trade.pnl <= 0);
+  const getCloseReason = (trade: GlobalTradeRecord): string => {
+    const explicit = String(trade.close_reason ?? '').toUpperCase();
+    if (explicit) return explicit;
+    if (trade.pnl > 0) return 'TP';
+    return 'UNKNOWN';
+  };
+  const tpOrders = history.filter((trade) => getCloseReason(trade) === 'TP');
+  const slOrders = history.filter((trade) => getCloseReason(trade) === 'SL');
+  const directionChangeOrders = history.filter((trade) => getCloseReason(trade) === 'DIRECTION_CHANGE');
   const tpCount = tpOrders.length;
   const slCount = slOrders.length;
   const totalTpUsdt = tpOrders.reduce((sum, trade) => sum + trade.pnl, 0);
   const totalSlUsdt = slOrders.reduce((sum, trade) => sum + trade.pnl, 0);
-  const totalNetPnl = totalTpUsdt + totalSlUsdt;
+  const totalNetPnl = history.reduce((sum, trade) => sum + trade.pnl, 0);
 
   return (
     <SafeNeoLayout>
@@ -151,7 +158,7 @@ export default function HistoryScreen() {
         </div>
 
         {!isLoading && history.length > 0 && (
-          <div className="mb-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="mb-8 grid grid-cols-2 md:grid-cols-5 gap-4">
             <NeoCard>
               <div className="text-center">
                 <p className="text-white/60 text-xs mb-1">Total Órdenes</p>
@@ -170,6 +177,13 @@ export default function HistoryScreen() {
                 <p className="text-white/60 text-xs mb-1">Operaciones SL</p>
                 <p className="text-2xl font-bold text-[#ff3366]">{slCount}</p>
                 <p className="text-xs text-[#ff3366]/80 mt-1">{totalSlUsdt.toFixed(2)} USDT</p>
+              </div>
+            </NeoCard>
+            <NeoCard>
+              <div className="text-center">
+                <p className="text-white/60 text-xs mb-1">Cambios de dirección</p>
+                <p className="text-2xl font-bold text-[#ffc857]">{directionChangeOrders.length}</p>
+                <p className="text-xs text-[#ffc857]/80 mt-1">Cierres revalidados</p>
               </div>
             </NeoCard>
             <NeoCard>
@@ -196,6 +210,14 @@ export default function HistoryScreen() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {history.map((trade, index) => {
               const isLong = trade.side === 'LONG' || trade.side === 'BUY' || trade.side === 'buy';
+              const closeReason = getCloseReason(trade);
+              const closeLabel = closeReason === 'TP'
+                ? 'TP'
+                : closeReason === 'SL'
+                  ? 'SL'
+                  : closeReason === 'DIRECTION_CHANGE'
+                    ? 'CAMBIO DE DIRECCIÓN'
+                    : 'NO DETERMINADO';
               return (
                 <NeoCard key={`${trade.symbol}-${trade.closed_at}-${trade.exit_price}-${index}`} title={trade.symbol}>
                   <div className="mt-2 flex flex-col gap-2">
@@ -215,6 +237,7 @@ export default function HistoryScreen() {
                       {trade.tp_price && <p className="text-white/70 text-xs"><span className="font-bold">Take Profit (TP):</span> {trade.tp_price}</p>}
                       {trade.sl_price && <p className="text-white/70 text-xs"><span className="font-bold">Stop Loss (SL):</span> {trade.sl_price}</p>}
                       <p className="text-white/70 text-xs"><span className="font-bold">Apalancamiento:</span> {trade.leverage}x</p>
+                      <p className="text-white/70 text-xs"><span className="font-bold">Motivo de cierre:</span> {closeLabel}</p>
                       <p className="text-white/50 text-xs mt-2">
                         Completada: {trade.closed_at ? new Date(trade.closed_at).toLocaleString() : 'N/A'}
                       </p>
