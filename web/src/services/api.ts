@@ -80,6 +80,67 @@ export interface ConfigResponse {
   execution_mode: string;
 }
 
+export interface TelegramPaperTargetInfo {
+  id: number;
+  sequence: number;
+  price: number;
+  allocation_pct: number;
+  amount: number;
+  status: 'PENDING' | 'HIT' | 'CANCELED' | string;
+  realized_pnl: number;
+  hit_at?: string | null;
+}
+
+export interface TelegramPaperOperation {
+  id: number;
+  telegram_message_id: number;
+  chat_id: string;
+  chat_title?: string | null;
+  sender?: string | null;
+  symbol?: string | null;
+  direction?: string | null;
+  side?: string | null;
+  market_type: string;
+  entry_type?: 'MARKET' | 'LIMIT' | string | null;
+  requested_entry_price?: number | null;
+  entry_price?: number | null;
+  amount?: number | null;
+  remaining_amount?: number | null;
+  leverage?: number | null;
+  status: string;
+  realized_pnl: number;
+  close_reason?: string | null;
+  rejection_reason?: string | null;
+  validation_summary?: string | null;
+  created_at?: string | null;
+  filled_at?: string | null;
+  closed_at?: string | null;
+  targets: TelegramPaperTargetInfo[];
+}
+
+export interface TelegramPaperConfig {
+  enabled: boolean;
+  max_positions: number;
+  max_realized_loss_usdt: number;
+  execution_mode: string;
+  entry_without_price: string;
+  entry_with_price: string;
+  tp_defaults: Record<string, number[]>;
+}
+
+export interface TelegramPaperStatus {
+  enabled: boolean;
+  execution_mode: string;
+  max_positions: number;
+  open_positions: number;
+  pending_orders: number;
+  realized_pnl: number;
+  max_realized_loss_usdt: number;
+  blocked_by_loss: boolean;
+}
+
+
+
 export interface CredentialResponse {
   id: number;
   user_id: number;
@@ -265,7 +326,53 @@ export const getConfig = async (): Promise<ConfigResponse> => {
   }
 };
 
+export const getTelegramPaperConfig = async (): Promise<TelegramPaperConfig> => {
+  const response = await fetchWithAuth(`${API_BASE_URL}/telegram/paper/config`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) throw new Error('No se pudo obtener la configuración Telegram Paper');
+  return await response.json();
+};
+
+export const updateTelegramPaperConfig = async (config: {
+  enabled?: boolean;
+  max_positions?: number;
+  max_realized_loss_usdt?: number;
+}): Promise<TelegramPaperConfig> => {
+  const response = await fetchWithAuth(`${API_BASE_URL}/telegram/paper/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || 'No se pudo actualizar Telegram Paper');
+  }
+  return await response.json();
+};
+
+export const getTelegramPaperStatus = async (): Promise<TelegramPaperStatus> => {
+  const response = await fetchWithAuth(`${API_BASE_URL}/telegram/paper/status`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) throw new Error('No se pudo obtener el estado Telegram Paper');
+  return await response.json();
+};
+
+export const getTelegramPaperOperations = async (limit = 100): Promise<TelegramPaperOperation[]> => {
+  const response = await fetchWithAuth(`${API_BASE_URL}/telegram/paper/operations?limit=${limit}`, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!response.ok) throw new Error('No se pudieron obtener las operaciones Telegram Paper');
+  const payload = await response.json();
+  return Array.isArray(payload?.data) ? payload.data : [];
+};
+
 export const getCredentials = async (): Promise<CredentialResponse[]> => {
+
   try {
     const response = await fetchWithAuth(`${API_BASE_URL}/credentials/`, {
       method: 'GET',
