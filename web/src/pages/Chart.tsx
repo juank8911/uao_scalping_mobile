@@ -49,18 +49,15 @@ export default function ChartScreen() {
       await getCredentials();
       if (!isMounted || !status) return;
 
-      const nextSymbol = selectedSymbol && openPositionSymbols.includes(selectedSymbol)
-        ? selectedSymbol
-        : (openPositionSymbols[0] ?? null);
-      if (nextSymbol !== selectedSymbol) {
-        setSelectedSymbol(nextSymbol);
+      if (!selectedSymbol && openPositionSymbols.length > 0) {
+        setSelectedSymbol(openPositionSymbols[0]);
       }
       setIsLoading(false);
     };
 
     fetchData();
     return () => { isMounted = false; };
-  }, [selectedSymbol, status, openPositionSymbols.join('|')]);
+  }, [status]);
 
   // Set default timeframe based on source when symbol changes
   useEffect(() => {

@@ -1,13 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
 import { SafeNeoLayout } from '../components/SafeNeoLayout';
 import { CheckCircle, Wifi, WifiOff, RefreshCw, Send } from 'lucide-react';
-import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
+import { useEngineWebSocket, subscribeCandles, unsubscribeCandles } from '../hooks/useEngineWebSocket';
+import { createChart, ColorType, CrosshairMode, type IChartApi, type ISeriesApi } from 'lightweight-charts';
+import { useEngineStore } from '../store/useEngineStore';
 import {
   getTelegramPaperConfig,
   updateTelegramPaperConfig,
   getTelegramPaperStatus,
   getTelegramPaperOperations,
+  fetchChartData,
   type TelegramPaperStatus,
   type TelegramPaperOperation,
 } from '../services/api';
@@ -93,109 +96,162 @@ async function fetchOkxCandles(symbol: string): Promise<Candle[]> {
 }
 
 function PaperChart({
-  symbol, candles, currentPrice, operations,
+  symbol, operations,
 }: {
   symbol: string;
-  candles: Candle[];
-  currentPrice: number | null;
   operations: TelegramPaperOperation[];
 }) {
-  const W = 600; const H = 240;
-  const padL = 8; const padR = 48; const padT = 12; const padB = 20;
-  const chartW = W - padL - padR;
-  const chartH = H - padT - padB;
+  const [timeframe, setTimeframe] = useState<string>('1h');
+  const [loading, setLoading] = useState(false);
 
-  if (candles.length < 2) {
-    return (
-      <div className="h-60 flex items-center justify-center text-white/35 text-xs">
-        {candles.length === 0 ? 'Cargando velas de mercado…' : 'Esperando más datos...'}
-      </div>
-    );
-  }
+  const candlesSnapshot = useEngineStore((state) => state.candlesSnapshot);
+  const latestCandle = useEngineStore((state) => state.latestCandle);
 
-  const allHighs = candles.map((c) => c.h);
-  const allLows = candles.map((c) => c.l);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const priceLinesRef = useRef<any[]>([]);
 
-  // Add order levels to price range
-  const levelPrices: number[] = [];
-  for (const op of operations) {
-    if (op.status === 'REJECTED') continue;
-    if (op.entry_price) levelPrices.push(op.entry_price);
-    if (op.requested_entry_price) levelPrices.push(op.requested_entry_price);
-    for (const t of op.targets) levelPrices.push(t.price);
-  }
-  if (currentPrice) levelPrices.push(currentPrice);
+  // Init Lightweight Charts
+  useEffect(() => {
+    if (chartContainerRef.current) {
+      const handleResize = () => {
+        if (chartContainerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+        }
+      };
 
-  const hi = Math.max(...allHighs, ...levelPrices) * 1.002;
-  const lo = Math.min(...allLows, ...levelPrices) * 0.998;
-  const span = hi - lo || 1;
+      const chart = createChart(chartContainerRef.current, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#020202' },
+          textColor: '#d1d4dc',
+        },
+        grid: {
+          vertLines: { color: 'rgba(52, 216, 255, 0.04)' },
+          horzLines: { color: 'rgba(52, 216, 255, 0.04)' },
+        },
+        crosshair: { mode: CrosshairMode.Normal },
+        timeScale: { timeVisible: true, secondsVisible: false },
+        width: chartContainerRef.current.clientWidth,
+        height: 280,
+      });
 
-  const toY = (p: number) => padT + ((hi - p) / span) * chartH;
-  const barW = Math.max(2, (chartW / candles.length) * 0.7);
+      chartRef.current = chart;
 
-  const priceLines: { price: number; color: string; label: string; dash?: string }[] = [];
-  for (const op of operations) {
-    if (op.status === 'REJECTED') continue;
-    const ep = op.entry_price ?? op.requested_entry_price;
-    if (ep) priceLines.push({ price: ep, color: op.direction === 'LONG' ? '#34d8ff' : '#f59e42', label: `Entrada ${op.direction}` });
-    for (const t of op.targets) {
-      const tColor = t.status === 'HIT' ? '#6ee7b7' : '#22c55e';
-      priceLines.push({ price: t.price, color: tColor, label: `TP${t.sequence}`, dash: '4 3' });
+      const candlestickSeries = chart.addCandlestickSeries({
+        upColor: '#4ade80',
+        downColor: '#f87171',
+        borderVisible: false,
+        wickUpColor: '#4ade80',
+        wickDownColor: '#f87171',
+      });
+
+      candlestickSeriesRef.current = candlestickSeries;
+      window.addEventListener('resize', handleResize);
+
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        chart.remove();
+        chartRef.current = null;
+        candlestickSeriesRef.current = null;
+      };
     }
-  }
-  if (currentPrice) {
-    priceLines.push({ price: currentPrice, color: '#fff', label: currentPrice.toPrecision(5) });
-  }
+  }, [symbol]);
+
+  // Subscribe candles WS & fallback REST
+  useEffect(() => {
+    if (!symbol || !candlestickSeriesRef.current) return;
+
+    setLoading(true);
+    subscribeCandles(symbol, timeframe, 'TELEGRAM');
+
+    fetchChartData(symbol, timeframe).then((data) => {
+      if (candlestickSeriesRef.current && data && data.length > 0) {
+        candlestickSeriesRef.current.setData(data);
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+
+    return () => {
+      if (symbol) {
+        unsubscribeCandles(symbol, 'TELEGRAM');
+      }
+    };
+  }, [symbol, timeframe]);
+
+  // Update candles from store snapshot/update
+  useEffect(() => {
+    if (candlesSnapshot && candlestickSeriesRef.current) {
+      candlestickSeriesRef.current.setData(candlesSnapshot);
+    }
+  }, [candlesSnapshot]);
+
+  useEffect(() => {
+    if (latestCandle && candlestickSeriesRef.current) {
+      candlestickSeriesRef.current.update(latestCandle);
+    }
+  }, [latestCandle]);
+
+  // Draw overlay price lines (Entry & TPs)
+  useEffect(() => {
+    const series = candlestickSeriesRef.current;
+    if (!series) return;
+
+    priceLinesRef.current.forEach((line) => series.removePriceLine(line));
+    priceLinesRef.current = [];
+
+    operations.forEach((op) => {
+      if (op.status === 'REJECTED' || op.status === 'CLOSED' || op.status === 'CANCELED') return;
+      const ep = op.entry_price ?? op.requested_entry_price;
+      if (ep) {
+        const line = series.createPriceLine({
+          price: ep,
+          color: op.direction === 'LONG' ? '#34d8ff' : '#f59e42',
+          lineWidth: 2,
+          lineStyle: 0,
+          title: `Entrada ${op.direction}`,
+        });
+        priceLinesRef.current.push(line);
+      }
+      op.targets.forEach((t) => {
+        const line = series.createPriceLine({
+          price: t.price,
+          color: t.status === 'HIT' ? '#4ade80' : '#22c55e',
+          lineWidth: 1,
+          lineStyle: 2,
+          title: `TP${t.sequence}`,
+        });
+        priceLinesRef.current.push(line);
+      });
+    });
+  }, [operations, symbol]);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-60" preserveAspectRatio="none">
-      {/* Grid lines */}
-      {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
-        const y = padT + frac * chartH;
-        const p = hi - frac * span;
-        return (
-          <g key={frac}>
-            <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="#ffffff10" strokeWidth="1" />
-            <text x={W - padR + 4} y={y + 3} fontSize="8" fill="#ffffff45" fontFamily="monospace">{p.toPrecision(4)}</text>
-          </g>
-        );
-      })}
-
-      {/* Candles */}
-      {candles.map((c, i) => {
-        const x = padL + (i / (candles.length - 1)) * chartW;
-        const isUp = c.c >= c.o;
-        const color = isUp ? '#22c55e' : '#ef4444';
-        const top = toY(Math.max(c.o, c.c));
-        const bot = toY(Math.min(c.o, c.c));
-        const bodyH = Math.max(1, bot - top);
-        return (
-          <g key={c.t}>
-            <line x1={x} y1={toY(c.h)} x2={x} y2={toY(c.l)} stroke={color} strokeWidth="1" />
-            <rect x={x - barW / 2} y={top} width={barW} height={bodyH} fill={color} />
-          </g>
-        );
-      })}
-
-      {/* Price level lines */}
-      {priceLines.map((pl, idx) => {
-        const y = toY(pl.price);
-        if (y < padT - 4 || y > padT + chartH + 4) return null;
-        return (
-          <g key={idx}>
-            <line
-              x1={padL} y1={y} x2={W - padR} y2={y}
-              stroke={pl.color} strokeWidth={pl.label.startsWith('Entrada') ? 2 : 1.5}
-              strokeDasharray={pl.dash ?? undefined}
-              opacity={0.9}
-            />
-            <text x={W - padR + 4} y={y + 3} fontSize="8" fill={pl.color} fontFamily="monospace" fontWeight="bold">
-              {pl.label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
+    <div className="flex flex-col w-full">
+      <div className="flex justify-between items-center mb-2 px-1">
+        <span className="text-white/70 text-xs font-bold">Temporalidad:</span>
+        <select
+          value={timeframe}
+          onChange={(e) => setTimeframe(e.target.value)}
+          className="bg-[#34d8ff]/10 px-2.5 py-1 rounded border border-[#34d8ff]/20 text-[#34d8ff] font-bold text-xs outline-none"
+        >
+          <option value="1m" className="bg-black text-[#34d8ff]">1m</option>
+          <option value="5m" className="bg-black text-[#34d8ff]">5m</option>
+          <option value="15m" className="bg-black text-[#34d8ff]">15m</option>
+          <option value="1h" className="bg-black text-[#34d8ff]">1h</option>
+          <option value="4h" className="bg-black text-[#34d8ff]">4h</option>
+          <option value="1d" className="bg-black text-[#34d8ff]">1d</option>
+        </select>
+      </div>
+      <div className="relative w-full border border-white/10 rounded-lg overflow-hidden bg-[#020202]">
+        {loading && (
+          <div className="absolute inset-0 flex justify-center items-center bg-black/50 z-10">
+            <div className="w-6 h-6 border-2 border-white/10 border-t-[#34d8ff] rounded-full animate-spin"></div>
+          </div>
+        )}
+        <div ref={chartContainerRef} className="w-full" style={{ height: 280 }} />
+      </div>
+    </div>
   );
 }
 
@@ -475,10 +531,13 @@ export default function TelegramConfigScreen() {
   };
 
     const msgColor = message?.type === 'error' ? 'text-red-400' : message?.type === 'success' ? 'text-green-400' : 'text-[#34d8ff]';
-  const paperSymbols = Array.from(new Set(paperOperations.map((item) => item.symbol).filter((symbol): symbol is string => Boolean(symbol))));
+  const paperSymbols = Array.from(new Set(
+    paperOperations
+      .filter((item) => item.status !== 'CLOSED' && item.status !== 'REJECTED' && item.status !== 'CANCELED')
+      .map((item) => item.symbol)
+      .filter((symbol): symbol is string => Boolean(symbol))
+  ));
   const selectedPaperOperations = paperOperations.filter((item) => item.symbol === selectedPaperSymbol);
-  const selectedCandles = selectedPaperSymbol ? (paperCandles[selectedPaperSymbol] || []) : [];
-  const selectedCurrentPrice = selectedPaperSymbol ? (paperCurrentPrice[selectedPaperSymbol] ?? null) : null;
 
   return (
 
@@ -881,14 +940,9 @@ export default function TelegramConfigScreen() {
                   <div className="rounded-lg border border-white/10 bg-black/20 p-2">
                     <div className="flex items-center justify-between mb-1 px-1">
                       <span className="text-[#34d8ff] font-bold text-sm">{selectedPaperSymbol}</span>
-                      <span className="text-white/70 text-xs font-mono">
-                        {selectedCurrentPrice ? selectedCurrentPrice.toPrecision(6) : 'Cargando...'}
-                      </span>
                     </div>
                     <PaperChart
                       symbol={selectedPaperSymbol}
-                      candles={selectedCandles}
-                      currentPrice={selectedCurrentPrice}
                       operations={selectedPaperOperations}
                     />
                   </div>
