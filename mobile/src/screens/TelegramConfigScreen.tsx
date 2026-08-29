@@ -17,6 +17,17 @@ interface Group {
 
 type ViewTab = 'settings' | 'messages';
 
+interface AiResponse {
+  approved?: boolean | null;
+  is_signal?: boolean | null;
+  reason?: string | null;
+  confidence?: number | null;
+  symbol?: string | null;
+  direction?: string | null;
+  entry_price?: number | null;
+  stop_loss?: number | null;
+}
+
 interface TelegramMessage {
   id: string;
   chat_id: string;
@@ -24,6 +35,13 @@ interface TelegramMessage {
   sender: string;
   text: string;
   date: string;
+  order_status?: string | null;
+  rejection_reason?: string | null;
+  order_symbol?: string | null;
+  order_direction?: string | null;
+  ai_response?: AiResponse | null;
+  realized_pnl?: number | null;
+  pnl?: number | null;
 }
 
 export default function TelegramConfigScreen() {
@@ -401,17 +419,87 @@ export default function TelegramConfigScreen() {
               <Text style={styles.infoTextCenter}>No hay mensajes recientes.</Text>
             ) : (
               <View style={styles.messagesList}>
-                {messages.map(msg => (
-                  <View key={msg.id} style={styles.messageItem}>
-                    <View style={styles.messageHeader}>
-                      <Text style={styles.messageChatTitle}>{msg.chat_title} <Text style={styles.messageSender}>por {msg.sender}</Text></Text>
-                      <Text style={styles.messageDate}>{new Date(msg.date).toLocaleString()}</Text>
+                {messages.map(msg => {
+                  const ai = msg.ai_response;
+                  const hasOrder = !!msg.order_status;
+                  const orderApproved = msg.order_status && msg.order_status !== 'REJECTED';
+
+                  return (
+                    <View key={msg.id} style={styles.messageItem}>
+                      <View style={styles.messageHeader}>
+                        <Text style={styles.messageChatTitle}>{msg.chat_title} <Text style={styles.messageSender}>por {msg.sender || 'Desconocido'}</Text></Text>
+                        <Text style={styles.messageDate}>{new Date(msg.date).toLocaleString()}</Text>
+                      </View>
+
+                      <View style={styles.messageBody}>
+                        <Text style={styles.messageText}>{msg.text}</Text>
+                      </View>
+
+                      {/* Info IA y Operación */}
+                      <View style={styles.detailsContainer}>
+                        {/* IA */}
+                        <View style={styles.detailBox}>
+                          <Text style={styles.detailLabel}>Evaluación IA</Text>
+                          {ai ? (
+                            <View style={styles.detailContent}>
+                              <NeoBadge
+                                label={ai.approved === true ? '✅ Aprobada' : ai.is_signal === false ? '⬜ No es señal' : '❌ Rechazada'}
+                                variant={ai.approved === true ? 'success' : ai.is_signal === false ? 'info' : 'danger'}
+                              />
+                              {ai.symbol && (
+                                <Text style={styles.symbolText}>{ai.symbol} {ai.direction}</Text>
+                              )}
+                              {ai.entry_price && (
+                                <Text style={styles.subDetailText}>Entrada: {ai.entry_price} · SL: {ai.stop_loss ?? '—'}</Text>
+                              )}
+                              {ai.confidence != null && (
+                                <Text style={styles.subDetailText}>Confianza: {(Number(ai.confidence) * 100).toFixed(0)}%</Text>
+                              )}
+                              {ai.reason && (
+                                <Text style={styles.reasonText}>{ai.reason}</Text>
+                              )}
+                            </View>
+                          ) : (
+                            <Text style={styles.subDetailText}>—</Text>
+                          )}
+                        </View>
+
+                        {/* Operación */}
+                        <View style={styles.detailBox}>
+                          <Text style={styles.detailLabel}>Estado Operación</Text>
+                          {hasOrder ? (
+                            <View style={styles.detailContent}>
+                              <NeoBadge
+                                label={orderApproved ? '📈 Operada / Colocada' : '🚫 Rechazada'}
+                                variant={orderApproved ? 'success' : 'danger'}
+                              />
+                              {msg.order_symbol && (
+                                <Text style={styles.symbolText}>{msg.order_symbol} · {msg.order_direction}</Text>
+                              )}
+                              {msg.order_status && (
+                                <Text style={styles.statusText}>{msg.order_status}</Text>
+                              )}
+                              {msg.rejection_reason && (
+                                <Text style={styles.rejectText}>{msg.rejection_reason}</Text>
+                              )}
+                              {(msg.realized_pnl != null || msg.pnl != null) && (
+                                <View style={styles.pnlContainer}>
+                                  <Text style={styles.pnlLabel}>PnL Resultante:</Text>
+                                  <Text style={[(msg.realized_pnl ?? msg.pnl ?? 0) >= 0 ? styles.pnlPositive : styles.pnlNegative]}>
+                                    {(msg.realized_pnl ?? msg.pnl ?? 0) >= 0 ? '+' : ''}
+                                    {Number(msg.realized_pnl ?? msg.pnl ?? 0).toFixed(4)} USDT
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                          ) : (
+                            <Text style={styles.subDetailText}>Sin proceso</Text>
+                          )}
+                        </View>
+                      </View>
                     </View>
-                    <View style={styles.messageBody}>
-                      <Text style={styles.messageText}>{msg.text}</Text>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
           </NeoCard>
@@ -674,5 +762,76 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 12,
     fontFamily: 'monospace',
-  }
+  },
+  detailsContainer: {
+    flexDirection: 'row',
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  detailBox: {
+    flex: 1,
+  },
+  detailLabel: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  detailContent: {
+    alignItems: 'flex-start',
+    gap: 2,
+  },
+  symbolText: {
+    color: '#34d8ff',
+    fontWeight: 'bold',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  subDetailText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10,
+  },
+  reasonText: {
+    color: '#fcd34d',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  statusText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 10,
+    fontFamily: 'monospace',
+  },
+  rejectText: {
+    color: '#fca5a5',
+    fontSize: 10,
+    marginTop: 2,
+  },
+  pnlContainer: {
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  pnlLabel: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10,
+  },
+  pnlPositive: {
+    color: '#4ade80',
+    fontWeight: 'bold',
+    fontSize: 11,
+  },
+  pnlNegative: {
+    color: '#f87171',
+    fontWeight: 'bold',
+    fontSize: 11,
+  },
 });

@@ -72,6 +72,8 @@ interface TelegramMessage {
   order_symbol?: string | null;
   order_direction?: string | null;
   ai_response?: AiResponse | null;
+  realized_pnl?: number | null;
+  pnl?: number | null;
 }
 
 function buildChartPoints(values: number[]): string {
@@ -220,6 +222,7 @@ export default function TelegramConfigScreen() {
       }
       if (payload?.event === 'telegram_paper_order_update' && payload.data) {
         loadPaperData();
+        loadMessages();
         return;
       }
       if (payload?.event !== 'new_telegram_message' || !payload.data) return;
@@ -704,7 +707,7 @@ export default function TelegramConfigScreen() {
                             </td>
 
                             {/* Columna Orden */}
-                            <td className="px-3 py-3 min-w-[140px]">
+                            <td className="px-3 py-3 min-w-[150px]">
                               {hasOrder ? (
                                 <div className="flex flex-col gap-1">
                                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold w-fit ${
@@ -712,7 +715,7 @@ export default function TelegramConfigScreen() {
                                       ? 'bg-green-500/20 text-green-300 border border-green-500/30'
                                       : 'bg-red-500/20 text-red-300 border border-red-500/30'
                                   }`}>
-                                    {orderApproved ? '📈 Orden colocada' : '🚫 Rechazada'}
+                                    {orderApproved ? '📈 Operada / Colocada' : '🚫 Rechazada'}
                                   </span>
                                   {msg.order_symbol && (
                                     <span className="text-white/70 font-bold text-[10px]">{msg.order_symbol} · {msg.order_direction}</span>
@@ -726,6 +729,15 @@ export default function TelegramConfigScreen() {
                                   )}
                                   {msg.rejection_reason && (
                                     <span className="text-red-300/70 text-[10px] break-words max-w-[130px]">{msg.rejection_reason}</span>
+                                  )}
+                                  {(msg.realized_pnl != null || msg.pnl != null) && (
+                                    <div className="mt-0.5 pt-0.5 border-t border-white/10 flex items-center gap-1 text-[11px] font-bold">
+                                      <span className="text-white/50 text-[10px]">PnL:</span>
+                                      <span className={(msg.realized_pnl ?? msg.pnl ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                        {(msg.realized_pnl ?? msg.pnl ?? 0) >= 0 ? '+' : ''}
+                                        {Number(msg.realized_pnl ?? msg.pnl ?? 0).toFixed(4)} USDT
+                                      </span>
+                                    </div>
                                   )}
                                 </div>
                               ) : (
