@@ -18,8 +18,9 @@
  *    Solo actualiza la suscripción de símbolo sin tocar el socket.
  */
 import { useEffect } from 'react';
-import { useEngineStore } from '../store/useEngineStore';
+import { useEngineStore, type Candle } from '../store/useEngineStore';
 import { getStatus } from '../services/api';
+import { getToken } from '../utils/auth';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 const HEARTBEAT_MS = 25_000;          // ping cada 25s (keepalive ante proxies)
@@ -35,6 +36,7 @@ let reconnectDelay = 1_000;
 let intentionallyClosed = false;
 let activeSymbolGlobal: string | null = null;
 let currentlySubscribedSymbol: string | null = null;
+let currentCandleSubscription: { symbol: string; timeframe: string; source: 'HFT' | 'TELEGRAM' } | null = null;
 
 // ─── Helpers internos ─────────────────────────────────────────────────────────
 function getWsUrl(): string {
@@ -43,7 +45,8 @@ function getWsUrl(): string {
     window.location.hostname === 'localhost'
       ? 'localhost:8000'
       : window.location.host;
-  return `${protocol}//${host}/api/v1/ws/notifications`;
+  const token = getToken() || '';
+  return `${protocol}//${host}/ws/engine?token=${encodeURIComponent(token)}`;
 }
 
 function stopHeartbeat() {
@@ -85,24 +88,60 @@ function connectSingleton() {
     if (activeSymbolGlobal) {
       ws.send(JSON.stringify({ action: 'subscribe', symbol: activeSymbolGlobal }));
     }
+    if (currentCandleSubscription) {
+      ws.send(JSON.stringify({
+        action: 'subscribe_candles',
+        symbol: currentCandleSubscription.symbol,
+        timeframe: currentCandleSubscription.timeframe,
+        source: currentCandleSubscription.source,
+      }));
+    }
   };
 
   ws.onmessage = (event) => {
     try {
       const payload = JSON.parse(event.data);
 
-      // Emitir evento global para que otros hooks (ej. useTelegramNotifications)
-      // puedan reaccionar sin abrir su propio socket
+      // Emitir evento global para que otros hooks puedan reaccionar
       window.dispatchEvent(new CustomEvent('ws:message', { detail: payload }));
 
-      const { event: evtType, symbol, data } = payload;
-      const { setStatus, updatePrice } = store();
+      const type = payload.type || payload.event;
+      const { setSnapshot, setStatus, updatePrice, setCandlesSnapshot, updateCandle } = store();
 
-      switch (evtType) {
+      if (type === 'snapshot') {
+        if (payload.data) {
+          setSnapshot(payload.data);
+        }
+        return;
+      }
+
+      if (type === 'candles_snapshot') {
+        if (Array.isArray(payload.candles)) {
+          setCandlesSnapshot(payload.candles);
+        }
+        return;
+      }
+
+      if (type === 'candle_update') {
+        const candleData = payload.data || payload.candle;
+        if (candleData) {
+          if (Array.isArray(candleData)) {
+            candleData.forEach((c: Candle) => updateCandle(c));
+          } else {
+            updateCandle(candleData);
+          }
+        }
+        return;
+      }
+
+      const { symbol, data } = payload;
+      switch (type) {
         case 'pong': break; // respuesta al heartbeat
         case 'ticker_update':
           if (symbol && data?.price != null) updatePrice(symbol, parseFloat(data.price));
           else if (symbol && data?.last != null) updatePrice(symbol, parseFloat(data.last));
+          else if (symbol && data?.close != null) updatePrice(symbol, parseFloat(data.close));
+          else if (payload.price != null && symbol) updatePrice(symbol, parseFloat(payload.price));
           break;
         case 'status_update':
           if (data) setStatus(data);
@@ -194,6 +233,33 @@ export const useEngineWebSocket = (activeSymbol?: string | null) => {
     }
     // Si no está abierto, onopen re-suscribirá usando activeSymbolGlobal
   }, [activeSymbol]);
+};
+
+export const subscribeCandles = (symbol: string, timeframe: string, source: 'HFT' | 'TELEGRAM') => {
+  currentCandleSubscription = { symbol, timeframe, source };
+  if (globalWs && globalWs.readyState === WebSocket.OPEN) {
+    globalWs.send(JSON.stringify({
+      action: 'subscribe_candles',
+      symbol,
+      timeframe,
+      source,
+    }));
+    console.log(`[WS] Suscrito a velas de ${symbol} (${timeframe}, ${source})`);
+  }
+};
+
+export const unsubscribeCandles = (symbol: string, source: 'HFT' | 'TELEGRAM') => {
+  if (currentCandleSubscription?.symbol === symbol) {
+    currentCandleSubscription = null;
+  }
+  if (globalWs && globalWs.readyState === WebSocket.OPEN) {
+    globalWs.send(JSON.stringify({
+      action: 'unsubscribe_candles',
+      symbol,
+      source,
+    }));
+    console.log(`[WS] Desuscrito de velas de ${symbol} (${source})`);
+  }
 };
 
 /** @deprecated Usar useEngineWebSocket desde páginas */

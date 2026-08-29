@@ -35,6 +35,7 @@ export interface PositionInfo {
   leverage: number;
   confidence?: number;
   liquidationPrice?: number;
+  source?: 'HFT' | 'TELEGRAM';
   orders?: AttachedOrderInfo[];
 }
 

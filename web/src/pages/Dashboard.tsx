@@ -160,11 +160,17 @@ export default function DashboardScreen() {
                   const roePercent = margin > 0 ? (calculatedPnl / margin) * 100 : 0;
                   const valueUsdt = pos.contracts * contractSize * currentMarkPrice;
                   
+                  const posSource = pos.source || 'HFT';
                   return (
                     <div key={idx} className="bg-white/5 p-2 rounded border border-white/5 text-xs flex justify-between items-center">
                       <div>
-                        <span className="font-bold text-white">{pos.symbol}</span>
-                        <span className={`ml-2 px-1 rounded text-[9px] ${!isShort ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-white">{pos.symbol}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${posSource === 'TELEGRAM' ? 'bg-purple-900/60 text-purple-300 border border-purple-500/30' : 'bg-cyan-900/60 text-cyan-300 border border-cyan-500/30'}`}>
+                            {posSource}
+                          </span>
+                        </div>
+                        <span className={`mt-1 inline-block px-1 rounded text-[9px] ${!isShort ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'bg-[#ff3366]/20 text-[#ff3366]'}`}>
                           {!isShort ? 'LONG' : 'SHORT'} {pos.leverage}x
                         </span>
                         <div className="text-white/70 mt-0.5 text-[10px] tabular-nums font-mono">
@@ -284,11 +290,14 @@ export default function DashboardScreen() {
                           {closingSymbol === position.symbol ? 'Cerrando...' : 'Cerrar'}
                         </NeoButton>
                       </div>
-                      <div className="flex flex-row items-center mb-1.5 mt-2">
+                      <div className="flex flex-row items-center gap-2 mb-1.5 mt-2">
                         <NeoBadge
                           children={isPaper ? '🧪 SIMULADO' : 'REAL'}
                           variant={isPaper ? 'warning' : 'accent'}
                         />
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold tracking-wide ${position.source === 'TELEGRAM' ? 'bg-purple-900/60 text-purple-300 border border-purple-500/40' : 'bg-cyan-900/60 text-cyan-300 border border-cyan-500/40'}`}>
+                          {position.source || 'HFT'}
+                        </span>
                       </div>
                       <p className="text-white/90 text-sm mb-1.5 mt-4">
                         <span className="font-bold text-[#4DA8DA]">PNL:</span>{' '}
@@ -355,10 +364,15 @@ export default function DashboardScreen() {
                       </div>
                       {standaloneOrders.map((ord, idx) => (
                         <div key={idx} className="mb-2.5">
-                          <NeoBadge 
-                            children={`${ord.side} ${ord.type}`} 
-                            variant={ord.side === 'BUY' ? 'success' : 'danger'} 
-                          />
+                          <div className="flex items-center gap-2">
+                            <NeoBadge
+                              children={`${ord.side} ${ord.type}`}
+                              variant={ord.side === 'BUY' ? 'success' : 'danger'}
+                            />
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold tracking-wide ${ord.source === 'TELEGRAM' ? 'bg-purple-900/60 text-purple-300 border border-purple-500/40' : 'bg-cyan-900/60 text-cyan-300 border border-cyan-500/40'}`}>
+                              {ord.source || 'HFT'}
+                            </span>
+                          </div>
                           <p className="text-white/90 text-sm mb-1 mt-1 tabular-nums font-mono">Precio: {ord.price.toFixed(7)} | Cant: {ord.amount}</p>
                           <p className="text-white/70 text-xs mt-0.5">
                             Estado: {ord.status === 'pending (simulado)' ? 'Esperando que el precio la toque…' : ord.status}
