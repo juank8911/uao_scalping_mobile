@@ -179,6 +179,32 @@ function PaperChart({
     };
   }, [symbol, timeframe]);
 
+  // Live ticker ticks listener to update last candle in real-time
+  useEffect(() => {
+    const handleWsMessage = (e: Event) => {
+      const payload = (e as CustomEvent).detail;
+      if (payload?.event === 'ticker_update' && payload.symbol === symbol && candlestickSeriesRef.current) {
+        const price = Number(payload.data?.last ?? payload.data?.close ?? payload.data?.price);
+        if (Number.isFinite(price) && price > 0) {
+          const snapshot = useEngineStore.getState().candlesSnapshot;
+          if (snapshot && snapshot.length > 0) {
+            const last = snapshot[snapshot.length - 1];
+            candlestickSeriesRef.current.update({
+              time: last.time,
+              open: last.open,
+              high: Math.max(last.high, price),
+              low: Math.min(last.low, price),
+              close: price,
+            });
+          }
+        }
+      }
+    };
+
+    window.addEventListener('ws:message', handleWsMessage);
+    return () => window.removeEventListener('ws:message', handleWsMessage);
+  }, [symbol]);
+
   // Update candles from store snapshot/update
   useEffect(() => {
     if (candlesSnapshot && candlestickSeriesRef.current) {
@@ -192,7 +218,7 @@ function PaperChart({
     }
   }, [latestCandle]);
 
-  // Draw overlay price lines (Entry & TPs)
+  // Draw overlay price lines (Entry & TPs) & markers for executed orders
   useEffect(() => {
     const series = candlestickSeriesRef.current;
     if (!series) return;
@@ -200,8 +226,11 @@ function PaperChart({
     priceLinesRef.current.forEach((line) => series.removePriceLine(line));
     priceLinesRef.current = [];
 
-    operations.forEach((op) => {
-      if (op.status === 'REJECTED' || op.status === 'CLOSED' || op.status === 'CANCELED') return;
+    const activeOps = operations.filter(
+      (op) => op.status !== 'REJECTED' && op.status !== 'CLOSED' && op.status !== 'CANCELED'
+    );
+
+    activeOps.forEach((op) => {
       const ep = op.entry_price ?? op.requested_entry_price;
       if (ep) {
         const line = series.createPriceLine({
@@ -214,6 +243,7 @@ function PaperChart({
         priceLinesRef.current.push(line);
       }
       op.targets.forEach((t) => {
+        if (t.status === 'CANCELED') return;
         const line = series.createPriceLine({
           price: t.price,
           color: t.status === 'HIT' ? '#4ade80' : '#22c55e',
@@ -224,6 +254,32 @@ function PaperChart({
         priceLinesRef.current.push(line);
       });
     });
+
+    // Markers for filled orders
+    const markers: any[] = [];
+    operations.forEach((op) => {
+      if (op.filled_at && op.entry_price) {
+        const filledTime = Math.floor(new Date(op.filled_at).getTime() / 1000);
+        if (Number.isFinite(filledTime) && filledTime > 0) {
+          markers.push({
+            time: filledTime,
+            position: op.direction === 'LONG' ? 'belowBar' : 'aboveBar',
+            color: op.direction === 'LONG' ? '#34d8ff' : '#f59e42',
+            shape: op.direction === 'LONG' ? 'arrowUp' : 'arrowDown',
+            text: `Ejecutada ${op.direction}`,
+          });
+        }
+      }
+    });
+
+    if (markers.length > 0) {
+      markers.sort((a, b) => a.time - b.time);
+      try {
+        series.setMarkers(markers);
+      } catch { /* ignorar descalce de timestamp de mercado */ }
+    } else {
+      series.setMarkers([]);
+    }
   }, [operations, symbol]);
 
   return (
@@ -980,7 +1036,48 @@ export default function TelegramConfigScreen() {
                     />
                   </div>
                 )}
-                {selectedPaperOperations.length === 0 ? <p className="text-white/40 text-sm text-center py-6">Aún no hay operaciones Telegram Paper.</p> : <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto">{selectedPaperOperations.map((operation) => <div key={operation.id} className="rounded-lg border border-white/10 p-3 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-bold text-white">{operation.direction || operation.side} · {operation.entry_type}</span><span className={operation.status === 'CLOSED' ? 'text-white/50' : operation.status === 'REJECTED' ? 'text-red-300' : 'text-green-300'}>{operation.status}</span></div><div className="grid grid-cols-2 gap-2 mt-2 text-white/60"><span>Entrada: {operation.entry_price ?? operation.requested_entry_price ?? '—'}</span><span>Leverage: {operation.leverage ?? '—'}x</span><span>Pendiente: {operation.remaining_amount ?? '—'}</span><span>PnL: {Number(operation.realized_pnl || 0).toFixed(4)} USDT</span></div>{operation.rejection_reason && <p className="text-red-300/80 mt-2">{operation.rejection_reason}</p>}<div className="flex flex-wrap gap-1 mt-2">{operation.targets.map((target) => <span key={target.id} className="rounded bg-white/5 px-2 py-1 text-white/55">TP{target.sequence}: {target.price} ({target.allocation_pct}%) · {target.status}</span>)}</div></div>)}</div>}
+                {selectedPaperOperations.length === 0 ? <p className="text-white/40 text-sm text-center py-6">Aún no hay operaciones Telegram Paper.</p> : <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto">{selectedPaperOperations.map((operation) => {
+                  const latestPrice = selectedPaperSymbol ? useEngineStore.getState().latestPrices[selectedPaperSymbol] : null;
+                  const entryP = operation.entry_price ?? operation.requested_entry_price;
+                  const isLong = (operation.direction || operation.side || '').toUpperCase() === 'LONG' || (operation.direction || operation.side || '').toUpperCase() === 'BUY';
+                  const lev = operation.leverage || Number(paperLeverage) || 1;
+                  const inv = Number(paperInvestmentAmount) || 50;
+
+                  let liveUnrealizedPnl: number | null = null;
+                  if (operation.status === 'FILLED' || operation.status === 'OPEN' || operation.status === 'PARTIALLY_FILLED') {
+                    if (entryP && latestPrice && entryP > 0) {
+                      const returnPct = isLong ? (latestPrice - entryP) / entryP : (entryP - latestPrice) / entryP;
+                      liveUnrealizedPnl = returnPct * inv * lev;
+                    }
+                  }
+
+                  return (
+                    <div key={operation.id} className="rounded-lg border border-white/10 p-3 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-white">{operation.direction || operation.side} · {operation.entry_type}</span>
+                        <span className={operation.status === 'CLOSED' ? 'text-white/50' : operation.status === 'REJECTED' ? 'text-red-300' : 'text-green-300'}>{operation.status}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mt-2 text-white/60">
+                        <span>Entrada: {entryP ?? '—'}</span>
+                        <span>Leverage: {lev}x</span>
+                        <span>Pendiente: {operation.remaining_amount ?? '—'}</span>
+                        <span>
+                          {liveUnrealizedPnl != null ? (
+                            <span className={liveUnrealizedPnl >= 0 ? 'text-[#00ff88] font-bold' : 'text-[#ff3366] font-bold'}>
+                              PnL Flotante: {liveUnrealizedPnl >= 0 ? '+' : ''}{liveUnrealizedPnl.toFixed(4)} USDT
+                            </span>
+                          ) : (
+                            <span>PnL Realizado: {Number(operation.realized_pnl || 0).toFixed(4)} USDT</span>
+                          )}
+                        </span>
+                      </div>
+                      {operation.rejection_reason && <p className="text-red-300/80 mt-2">{operation.rejection_reason}</p>}
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {operation.targets.map((target) => <span key={target.id} className="rounded bg-white/5 px-2 py-1 text-white/55">TP{target.sequence}: {target.price} ({target.allocation_pct}%) · {target.status}</span>)}
+                      </div>
+                    </div>
+                  );
+                })}</div>}
               </div>
             </NeoCard>
           </div>
