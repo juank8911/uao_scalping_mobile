@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import type { MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
+import { NeoCard, NeoBadge, NeoButton, NeoModal } from 'jeikei-design-system';
+import { SafeNeoLayout } from '../components/SafeNeoLayout';
 import { getStatus, startEngine, stopEngine, closePosition } from '../services/api';
 import type { PositionInfo } from '../services/api';
 import { authenticateBiometrically } from '../utils/auth';
@@ -54,7 +56,7 @@ export default function DashboardScreen() {
   };
 
   return (
-    <NeoLayout>
+    <SafeNeoLayout>
       <div className="p-6 pt-16 md:p-10 pb-32 max-w-4xl mx-auto w-full">
         {!isConnected && (
           <div className="bg-[#ef5350] p-3 rounded-lg mb-4 text-center">
@@ -64,10 +66,9 @@ export default function DashboardScreen() {
         )}
         <div className="mb-6 flex flex-col items-center">
           <div className="flex flex-row items-center justify-center gap-4">
-            <NeoBadge
-              label={status?.is_running ? 'SYSTEM ONLINE' : 'SYSTEM OFFLINE'}
-              variant={status?.is_running ? 'success' : 'danger'}
-            />
+            <NeoBadge variant={status?.is_running ? 'success' : 'danger'}>
+              {status?.is_running ? 'SYSTEM ONLINE' : 'SYSTEM OFFLINE'}
+            </NeoBadge>
             {/* Custom toggle switch for React web */}
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -83,12 +84,13 @@ export default function DashboardScreen() {
           <div className="h-2" />
           {status && (
             <NeoBadge
-              label={`MODE: ${status.execution_mode}`}
               variant={
                 status.execution_mode === 'LIVE' ? 'danger' :
-                status.execution_mode === 'TESTNET' ? 'warning' : 'primary'
+                status.execution_mode === 'TESTNET' ? 'warning' : 'accent'
               }
-            />
+            >
+              {`MODE: ${status.execution_mode}`}
+            </NeoBadge>
           )}
         </div>
 
@@ -148,9 +150,12 @@ export default function DashboardScreen() {
                   const isShort = pos.side.toUpperCase() === 'SHORT' || pos.side.toUpperCase() === 'SELL';
                   const contractSize = pos.contractSize || 1;
                   const currentMarkPrice = pos.markPrice;
-                  const calculatedPnl = isShort
-                    ? (pos.entryPrice - currentMarkPrice) * pos.contracts * contractSize
-                    : (currentMarkPrice - pos.entryPrice) * pos.contracts * contractSize;
+                                    const calculatedPnl = Number.isFinite(pos.unrealizedPnl)
+                    ? pos.unrealizedPnl
+                    : (isShort
+                      ? (pos.entryPrice - currentMarkPrice) * pos.contracts * contractSize
+                      : (currentMarkPrice - pos.entryPrice) * pos.contracts * contractSize);
+
                   const margin = (pos.entryPrice * pos.contracts * contractSize) / pos.leverage;
                   const roePercent = margin > 0 ? (calculatedPnl / margin) * 100 : 0;
                   const valueUsdt = pos.contracts * contractSize * currentMarkPrice;
@@ -213,12 +218,14 @@ export default function DashboardScreen() {
               : false;
             const contractSizePos = position?.contractSize || 1;
             const livePnl = position
-              ? isShortPos
-                ? (position.entryPrice - position.markPrice) * position.contracts * contractSizePos
-                : (position.markPrice - position.entryPrice) * position.contracts * contractSizePos
+              ? (Number.isFinite(position.unrealizedPnl)
+                ? position.unrealizedPnl
+                : (isShortPos
+                  ? (position.entryPrice - position.markPrice) * position.contracts * contractSizePos
+                  : (position.markPrice - position.entryPrice) * position.contracts * contractSizePos))
               : 0;
 
-            const handleClosePosition = async (e: React.MouseEvent, sym: string) => {
+            const handleClosePosition = async (e: MouseEvent<HTMLButtonElement>, sym: string) => {
               e.stopPropagation();
               setClosingSymbol(sym);
               try {
@@ -260,8 +267,8 @@ export default function DashboardScreen() {
                       <div className="absolute top-3 right-3 flex gap-2">
                         <NeoButton 
                           variant="secondary" 
-                          size="small" 
-                          onClick={(e) => {
+                          size="sm" 
+                          onClick={(e: MouseEvent<HTMLButtonElement>) => {
                             e.stopPropagation();
                             navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
                           }} 
@@ -269,9 +276,9 @@ export default function DashboardScreen() {
                           Gráfico
                         </NeoButton>
                         <NeoButton 
-                          variant="danger" 
-                          size="small" 
-                          onClick={(e) => handleClosePosition(e, position.symbol)} 
+                          variant="secondary" 
+                          size="sm" 
+                          onClick={(e: MouseEvent<HTMLButtonElement>) => handleClosePosition(e, position.symbol)} 
                           disabled={closingSymbol === position.symbol}
                         >
                           {closingSymbol === position.symbol ? 'Cerrando...' : 'Cerrar'}
@@ -279,8 +286,8 @@ export default function DashboardScreen() {
                       </div>
                       <div className="flex flex-row items-center mb-1.5 mt-2">
                         <NeoBadge
-                          label={isPaper ? '🧪 SIMULADO' : 'REAL'}
-                          variant={isPaper ? 'warning' : 'primary'}
+                          children={isPaper ? '🧪 SIMULADO' : 'REAL'}
+                          variant={isPaper ? 'warning' : 'accent'}
                         />
                       </div>
                       <p className="text-white/90 text-sm mb-1.5 mt-4">
@@ -321,8 +328,8 @@ export default function DashboardScreen() {
                       <div className="absolute top-3 right-3 flex gap-2">
                         <NeoButton 
                           variant="secondary" 
-                          size="small" 
-                          onClick={(e) => {
+                          size="sm" 
+                          onClick={(e: MouseEvent<HTMLButtonElement>) => {
                             e.stopPropagation();
                             navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
                           }} 
@@ -342,14 +349,14 @@ export default function DashboardScreen() {
                       <div className="flex flex-row items-center mb-2 gap-2 mt-2">
                         <p className="font-bold text-[#4DA8DA]">Órdenes de Entrada Abiertas:</p>
                         <NeoBadge
-                          label={isPaper ? '🧪 SIMULADO' : 'REAL'}
-                          variant={isPaper ? 'warning' : 'primary'}
+                          children={isPaper ? '🧪 SIMULADO' : 'REAL'}
+                          variant={isPaper ? 'warning' : 'accent'}
                         />
                       </div>
                       {standaloneOrders.map((ord, idx) => (
                         <div key={idx} className="mb-2.5">
                           <NeoBadge 
-                            label={`${ord.side} ${ord.type}`} 
+                            children={`${ord.side} ${ord.type}`} 
                             variant={ord.side === 'BUY' ? 'success' : 'danger'} 
                           />
                           <p className="text-white/90 text-sm mb-1 mt-1 tabular-nums font-mono">Precio: {ord.price.toFixed(7)} | Cant: {ord.amount}</p>
@@ -364,8 +371,8 @@ export default function DashboardScreen() {
                       <div className="absolute top-2 right-2">
                         <NeoButton 
                           variant="secondary" 
-                          size="small" 
-                          onClick={(e) => {
+                          size="sm" 
+                          onClick={(e: MouseEvent<HTMLButtonElement>) => {
                             e.stopPropagation();
                             navigate(`/chart?symbol=${encodeURIComponent(symbol)}`);
                           }} 
@@ -450,6 +457,6 @@ export default function DashboardScreen() {
           <p className="text-white/70 text-xs mt-2">Ningún símbolo activo disponible.</p>
         )}
       </NeoModal>
-    </NeoLayout>
+    </SafeNeoLayout>
   );
 }

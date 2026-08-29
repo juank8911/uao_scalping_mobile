@@ -25,6 +25,14 @@ export const RightSidebarNavigation: React.FC = () => {
         {collapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
       </button>
 
+      <div className={`border-b border-[#34d8ff]/15 px-2 pb-4 pt-5 ${collapsed ? 'flex justify-center' : ''}`}>
+        <img
+          src="/branding/jeikei-scalping.png"
+          alt="Jeikei Scalping"
+          className={`${collapsed ? 'h-7 w-7' : 'h-10 w-auto max-w-[126px]'} object-contain`}
+        />
+      </div>
+
       <div className="flex-1 flex flex-col gap-4 py-10 px-2 mt-8">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
@@ -45,6 +53,19 @@ export const RightSidebarNavigation: React.FC = () => {
             </NeoButton>
           );
         })}
+      </div>
+
+      <div className={`border-t border-white/10 px-2 py-4 ${collapsed ? 'flex justify-center' : ''}`}>
+        <div className={`flex items-center gap-2 ${collapsed ? 'justify-center' : ''}`} title="JEIKEI AI Architects">
+          <img
+            src="/branding/jeikei-ai-architects.png"
+            alt="JEIKEI AI Architects"
+            className={`${collapsed ? 'h-7 w-7' : 'h-8 w-auto max-w-[112px]'} object-contain`}
+          />
+          {!collapsed && (
+            <span className="text-[8px] font-semibold uppercase leading-tight tracking-[0.16em] text-white/35">Developer</span>
+          )}
+        </div>
       </div>
     </div>
   );

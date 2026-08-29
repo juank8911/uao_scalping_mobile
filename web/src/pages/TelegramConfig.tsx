@@ -1,6 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { NeoLayout, NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
+import { useState, useEffect } from 'react';
+import { NeoCard, NeoBadge, NeoButton } from 'jeikei-design-system';
+import { SafeNeoLayout } from '../components/SafeNeoLayout';
 import { CheckCircle, Wifi, WifiOff, RefreshCw, Send } from 'lucide-react';
+import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
+import {
+  getTelegramPaperConfig,
+  updateTelegramPaperConfig,
+  getTelegramPaperStatus,
+  getTelegramPaperOperations,
+  type TelegramPaperStatus,
+  type TelegramPaperOperation,
+} from '../services/api';
 
 const API_BASE = '/api/v1/telegram';
 import { getToken } from '../utils/auth';
@@ -29,23 +39,57 @@ interface Group {
   title: string;
   is_group: boolean;
   is_channel: boolean;
+  is_chat: boolean;
   is_monitored: boolean;
   expected_structure?: string;
   use_all?: boolean;
 }
 
-type ViewTab = 'settings' | 'messages';
+type ViewTab = 'settings' | 'messages' | 'paper';
+
+interface AiResponse {
+  approved?: boolean | null;
+  is_signal?: boolean | null;
+  reason?: string | null;
+  confidence?: number | null;
+  symbol?: string | null;
+  direction?: string | null;
+  entry_price?: number | null;
+  stop_loss?: number | null;
+}
 
 interface TelegramMessage {
   id: string;
+  telegram_message_id: number;
   chat_id: string;
   chat_title: string;
-  sender: string;
+  sender: string | null;
   text: string;
   date: string;
+  received_at?: string | null;
+  order_status?: string | null;
+  rejection_reason?: string | null;
+  order_symbol?: string | null;
+  order_direction?: string | null;
+  ai_response?: AiResponse | null;
+  realized_pnl?: number | null;
+  pnl?: number | null;
+}
+
+function buildChartPoints(values: number[]): string {
+  if (values.length < 2) return '';
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  return values.map((value, index) => {
+    const x = (index / (values.length - 1)) * 600;
+    const y = 170 - ((value - min) / span) * 150;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
 }
 
 export default function TelegramConfigScreen() {
+
   const [activeTab, setActiveTab] = useState<ViewTab>('settings');
   // Step state
   const [step, setStep] = useState<Step>('config');
@@ -72,9 +116,64 @@ export default function TelegramConfigScreen() {
 
   // Messages
   const [messages, setMessages] = useState<TelegramMessage[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
+    const [loadingMessages, setLoadingMessages] = useState(false);
+
+  // Telegram Paper (separate from HFT and prdictor)
+  const [paperStatus, setPaperStatus] = useState<TelegramPaperStatus | null>(null);
+  const [paperOperations, setPaperOperations] = useState<TelegramPaperOperation[]>([]);
+  const [paperEnabled, setPaperEnabled] = useState(false);
+  const [paperMaxPositions, setPaperMaxPositions] = useState(3);
+  const [paperMaxLoss, setPaperMaxLoss] = useState(10);
+  const [selectedPaperSymbol, setSelectedPaperSymbol] = useState<string | null>(null);
+  const [paperPrices, setPaperPrices] = useState<Record<string, number[]>>({});
+  useEngineWebSocket(selectedPaperSymbol);
+
+  const loadPaperData = async () => {
+    try {
+      const [config, status, operations] = await Promise.all([
+        getTelegramPaperConfig(),
+        getTelegramPaperStatus(),
+        getTelegramPaperOperations(),
+      ]);
+      setPaperStatus(status);
+      setPaperOperations(operations);
+      setPaperEnabled(config.enabled);
+      setPaperMaxPositions(config.max_positions);
+      setPaperMaxLoss(config.max_realized_loss_usdt);
+      if (!selectedPaperSymbol && operations.find((item) => item.symbol)?.symbol) {
+        setSelectedPaperSymbol(operations.find((item) => item.symbol)?.symbol || null);
+      }
+    } catch (error) {
+      console.error('Error cargando Telegram Paper:', error);
+    }
+  };
+
+  const savePaperConfig = async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      await updateTelegramPaperConfig({
+        enabled: paperEnabled,
+        max_positions: paperMaxPositions,
+        max_realized_loss_usdt: paperMaxLoss,
+      });
+      setMessage({ text: 'Configuración Telegram Paper guardada.', type: 'success' });
+      await loadPaperData();
+    } catch (e: any) {
+      setMessage({ text: e.message, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPaperData();
+    const timer = window.setInterval(loadPaperData, 5000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // Load current config on mount
+
   useEffect(() => {
     apiFetch('/config').then((data) => {
       if (data.configured) {
@@ -103,10 +202,57 @@ export default function TelegramConfigScreen() {
   };
 
   useEffect(() => {
-    if (activeTab === 'messages' && isConnected) {
+    if (activeTab === 'messages') {
       loadMessages();
     }
-  }, [activeTab, isConnected]);
+  }, [activeTab]);
+
+  useEffect(() => {
+    const handleTelegramMessage = (event: Event) => {
+      const payload = (event as CustomEvent).detail;
+      if (payload?.event === 'ticker_update' && payload.symbol && payload.data) {
+        const price = Number(payload.data.last ?? payload.data.close ?? payload.data.price);
+        if (Number.isFinite(price) && price > 0) {
+          setPaperPrices((previous) => ({
+            ...previous,
+            [String(payload.symbol)]: [...(previous[String(payload.symbol)] || []), price].slice(-80),
+          }));
+        }
+        return;
+      }
+      if (payload?.event === 'telegram_paper_order_update' && payload.data) {
+        loadPaperData();
+        loadMessages();
+        return;
+      }
+      if (payload?.event !== 'new_telegram_message' || !payload.data) return;
+
+      const data = payload.data;
+      const telegramMessageId = Number(data.telegram_message_id);
+      const incoming: TelegramMessage = {
+        id: `live-${data.chat_id}-${telegramMessageId || Date.now()}`,
+        telegram_message_id: telegramMessageId,
+        chat_id: String(data.chat_id || ''),
+        chat_title: String(data.chat_title || 'Desconocido'),
+        sender: data.sender_name ? String(data.sender_name) : null,
+        text: String(data.text || ''),
+        date: data.date || new Date().toISOString(),
+        received_at: new Date().toISOString(),
+      };
+
+      setMessages((previous) => {
+        const isDuplicate = telegramMessageId > 0 && previous.some(
+          (message) => message.chat_id === incoming.chat_id
+            && message.telegram_message_id === telegramMessageId,
+        );
+        if (isDuplicate) return previous;
+        return [incoming, ...previous].slice(0, 500);
+      });
+    };
+
+    window.addEventListener('ws:message', handleTelegramMessage);
+    return () => window.removeEventListener('ws:message', handleTelegramMessage);
+  }, []);
 
   const loadGroups = async () => {
     try {
@@ -203,10 +349,15 @@ export default function TelegramConfigScreen() {
     }
   };
 
-  const msgColor = message?.type === 'error' ? 'text-red-400' : message?.type === 'success' ? 'text-green-400' : 'text-[#34d8ff]';
+    const msgColor = message?.type === 'error' ? 'text-red-400' : message?.type === 'success' ? 'text-green-400' : 'text-[#34d8ff]';
+  const paperSymbols = Array.from(new Set(paperOperations.map((item) => item.symbol).filter((symbol): symbol is string => Boolean(symbol))));
+  const selectedPaperOperations = paperOperations.filter((item) => item.symbol === selectedPaperSymbol);
+  const selectedPaperPrices = selectedPaperSymbol ? (paperPrices[selectedPaperSymbol] || []) : [];
+  const chartPoints = buildChartPoints(selectedPaperPrices);
 
   return (
-    <NeoLayout>
+
+    <SafeNeoLayout>
       <div className="flex flex-col flex-1 pt-16 pb-28 h-full max-w-2xl mx-auto w-full px-4">
         {/* Header */}
         <div className="flex flex-row justify-between items-center mb-6">
@@ -230,12 +381,19 @@ export default function TelegramConfigScreen() {
           >
             Configuración
           </button>
-          <button 
+                    <button 
             className={`px-4 py-2 font-bold text-sm border-b-2 transition-colors ${activeTab === 'messages' ? 'border-[#34d8ff] text-[#34d8ff]' : 'border-transparent text-white/50 hover:text-white'}`}
             onClick={() => setActiveTab('messages')}
           >
             Mensajes Recientes
           </button>
+          <button 
+            className={`px-4 py-2 font-bold text-sm border-b-2 transition-colors ${activeTab === 'paper' ? 'border-[#34d8ff] text-[#34d8ff]' : 'border-transparent text-white/50 hover:text-white'}`}
+            onClick={() => setActiveTab('paper')}
+          >
+            Paper
+          </button>
+
         </div>
 
         {activeTab === 'settings' ? (
@@ -355,7 +513,7 @@ export default function TelegramConfigScreen() {
 
         {/* STEP 3: Groups */}
         {step === 'groups' && (
-          <NeoCard title={`Grupos y Canales (${groups.length})`} value="">
+          <NeoCard title={`Grupos, canales y chats (${groups.length})`} value="">
             <div className="mt-4 flex flex-col gap-3">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-white/50 text-xs">{selectedGroups.size} seleccionados para monitorear</p>
@@ -385,8 +543,8 @@ export default function TelegramConfigScreen() {
                           <span className="text-sm font-medium text-left">{g.title}</span>
                         </div>
                         <NeoBadge
-                          label={g.is_channel ? 'Canal' : 'Grupo'}
-                          variant={g.is_channel ? 'info' : 'success'}
+                          children={g.is_chat ? 'Chat' : g.is_channel ? 'Canal' : 'Grupo'}
+                          variant={g.is_chat ? 'accent' : g.is_channel ? 'accent' : 'success'}
                         />
                       </div>
                       
@@ -431,46 +589,187 @@ export default function TelegramConfigScreen() {
               </div>
             </div>
           </NeoCard>
-        )}
-          </>
-        ) : (
-          <NeoCard title="Últimos Mensajes" value="">
+                )}
+
+        {step === 'groups' && (
+          <NeoCard title="Telegram Paper" value={paperStatus?.blocked_by_loss ? 'BLOQUEADO' : paperStatus?.enabled ? 'ACTIVO' : 'INACTIVO'}>
             <div className="mt-4 flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <p className="text-white/50 text-sm">Mensajes recibidos de tus grupos monitoreados.</p>
-                <button onClick={loadMessages} className="text-[#34d8ff] text-xs flex items-center gap-1" disabled={loadingMessages}>
-                  <RefreshCw size={12} className={loadingMessages ? "animate-spin" : ""} /> Actualizar
-                </button>
+              <div className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-white/65">
+                <p className="font-bold text-amber-200 mb-1">Ruta adicional, separada de HFT</p>
+                <p>Solo acepta futuros. El mensaje con precio crea LIMIT; sin precio crea MARKET Paper. La validación usa velas 10s/1m/3m agregado/5m/15m, sin llamar a prdictor ni modificar el scalping de alta frecuencia.</p>
               </div>
-              
-              {!isConnected ? (
-                <p className="text-white/40 text-sm py-4 text-center">Debes configurar y conectar Telegram primero.</p>
-              ) : messages.length === 0 ? (
-                <p className="text-white/40 text-sm py-4 text-center">No hay mensajes recientes.</p>
-              ) : (
-                <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2">
-                  {messages.map(msg => (
-                    <div key={msg.id} className="bg-white/5 border border-white/10 rounded-lg p-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[#34d8ff] font-bold text-sm">{msg.chat_title}</span>
-                          <span className="text-white/40 text-xs">por {msg.sender}</span>
-                        </div>
-                        <span className="text-white/40 text-xs">
-                          {new Date(msg.date).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="text-white/80 text-sm whitespace-pre-wrap font-mono bg-black/20 p-2 rounded">
-                        {msg.text}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <label className="flex items-center justify-between gap-3 text-sm text-white/80">
+                <span>Habilitar ejecución Telegram Paper</span>
+                <input type="checkbox" checked={paperEnabled} onChange={(event) => setPaperEnabled(event.target.checked)} className="w-4 h-4 accent-[#34d8ff]" />
+              </label>
+              <div>
+                <label className="text-white/60 text-xs font-bold tracking-widest mb-1 block">Máximo de posiciones abiertas</label>
+                <input type="number" min={1} max={3} value={paperMaxPositions} onChange={(event) => setPaperMaxPositions(Math.min(3, Math.max(1, Number(event.target.value) || 1)))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-[#34d8ff]/50" />
+                <p className="text-white/40 text-xs mt-1">Máximo confirmado: 3. Solo cuentan posiciones Telegram abiertas.</p>
+              </div>
+              <div>
+                <label className="text-white/60 text-xs font-bold tracking-widest mb-1 block">Límite de pérdida realizada Telegram (USDT)</label>
+                <input type="number" min={0.01} step={0.01} value={paperMaxLoss} onChange={(event) => setPaperMaxLoss(Math.max(0.01, Number(event.target.value) || 10))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-[#34d8ff]/50" />
+                <p className="text-white/40 text-xs mt-1">Bloquea nuevas entradas al alcanzar −{paperMaxLoss.toFixed(2)} USDT; no cuenta PnL abierto ni órdenes pendientes.</p>
+              </div>
+              {paperStatus && <div className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded border border-white/10 p-2"><span className="block text-white/40">Abiertas</span><strong className="text-white">{paperStatus.open_positions}</strong></div><div className="rounded border border-white/10 p-2"><span className="block text-white/40">Pendientes</span><strong className="text-white">{paperStatus.pending_orders}</strong></div><div className="rounded border border-white/10 p-2"><span className="block text-white/40">PnL realizado</span><strong className={paperStatus.realized_pnl < 0 ? 'text-red-300' : 'text-green-300'}>{paperStatus.realized_pnl.toFixed(4)}</strong></div></div>}
+              <NeoButton variant="primary" size="md" onClick={savePaperConfig} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Telegram Paper'}</NeoButton>
             </div>
           </NeoCard>
         )}
+          </>
+        ) : activeTab === 'messages' ? (
+          <NeoCard title="Mensajes Persistidos" value="">
+
+            <div className="mt-4 flex flex-col gap-4">
+              <div className="flex justify-between items-center gap-4">
+                <p className="text-white/50 text-sm">Mensajes admitidos y guardados en la base de datos.</p>
+                <button onClick={loadMessages} className="text-[#34d8ff] text-xs flex items-center gap-1 shrink-0" disabled={loadingMessages}>
+                  <RefreshCw size={12} className={loadingMessages ? "animate-spin" : ""} /> Actualizar
+                </button>
+              </div>
+
+              {!isConnected && messages.length > 0 && (
+                <p className="text-amber-300/80 text-xs border border-amber-300/20 rounded-lg px-3 py-2">
+                  Telegram está desconectado. Se muestran los mensajes que ya quedaron persistidos.
+                </p>
+              )}
+
+              {loadingMessages ? (
+                <p className="text-white/40 text-sm py-4 text-center">Cargando mensajes...</p>
+              ) : messages.length === 0 ? (
+                <p className="text-white/40 text-sm py-4 text-center">
+                  {isConnected ? 'No hay mensajes admitidos todavía.' : 'No hay mensajes persistidos. Configura y conecta Telegram para iniciar la prueba.'}
+                </p>
+              ) : (
+                <div className="overflow-x-auto max-h-[600px] overflow-y-auto rounded-lg border border-white/10">
+                  <table className="w-full min-w-[820px] text-left text-xs">
+                    <thead className="sticky top-0 bg-[#101010] text-white/50 uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3 py-3 font-bold">Fecha</th>
+                        <th className="px-3 py-3 font-bold">Grupo / canal</th>
+                        <th className="px-3 py-3 font-bold">Remitente</th>
+                        <th className="px-3 py-3 font-bold">Mensaje</th>
+                        <th className="px-3 py-3 font-bold">IA</th>
+                        <th className="px-3 py-3 font-bold">Orden</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {messages.map(msg => {
+                        const ai = msg.ai_response;
+                        const hasOrder = !!msg.order_status;
+                        const orderApproved = msg.order_status && msg.order_status !== 'REJECTED';
+
+                        return (
+                          <tr key={msg.id} className="align-top hover:bg-white/5">
+                            <td className="px-3 py-3 whitespace-nowrap text-white/50">
+                              {new Date(msg.date).toLocaleString()}
+                            </td>
+                            <td className="px-3 py-3 text-[#34d8ff] font-bold max-w-[160px] break-words">
+                              {msg.chat_title}
+                            </td>
+                            <td className="px-3 py-3 text-white/60 max-w-[120px] break-words">
+                              {msg.sender || 'Desconocido'}
+                            </td>
+                            <td className="px-3 py-3 text-white/80 whitespace-pre-wrap break-words font-mono min-w-[220px] max-w-[280px]">
+                              {msg.text}
+                            </td>
+
+                            {/* Columna IA */}
+                            <td className="px-3 py-3 min-w-[180px]">
+                              {ai ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold w-fit ${
+                                    ai.approved === true
+                                      ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                                      : ai.is_signal === false
+                                      ? 'bg-white/10 text-white/50 border border-white/15'
+                                      : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                  }`}>
+                                    {ai.approved === true ? '✅ Aprobada' : ai.is_signal === false ? '⬜ No es señal' : '❌ Rechazada'}
+                                  </span>
+                                  {ai.symbol && (
+                                    <span className="text-[#34d8ff] font-bold text-[10px]">{ai.symbol} {ai.direction}</span>
+                                  )}
+                                  {ai.entry_price && (
+                                    <span className="text-white/50 text-[10px]">Entrada: {ai.entry_price} · SL: {ai.stop_loss ?? '—'}</span>
+                                  )}
+                                  {ai.confidence != null && (
+                                    <span className="text-white/40 text-[10px]">Confianza: {(Number(ai.confidence) * 100).toFixed(0)}%</span>
+                                  )}
+                                  {ai.reason && (
+                                    <span className="text-amber-300/80 text-[10px] break-words max-w-[170px]">{ai.reason}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-white/25 text-[10px]">—</span>
+                              )}
+                            </td>
+
+                            {/* Columna Orden */}
+                            <td className="px-3 py-3 min-w-[150px]">
+                              {hasOrder ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold w-fit ${
+                                    orderApproved
+                                      ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+                                      : 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                  }`}>
+                                    {orderApproved ? '📈 Operada / Colocada' : '🚫 Rechazada'}
+                                  </span>
+                                  {msg.order_symbol && (
+                                    <span className="text-white/70 font-bold text-[10px]">{msg.order_symbol} · {msg.order_direction}</span>
+                                  )}
+                                  {msg.order_status && (
+                                    <span className={`text-[10px] font-mono ${
+                                      msg.order_status === 'OPEN' ? 'text-green-300'
+                                      : msg.order_status === 'CLOSED' ? 'text-white/50'
+                                      : 'text-red-300/80'
+                                    }`}>{msg.order_status}</span>
+                                  )}
+                                  {msg.rejection_reason && (
+                                    <span className="text-red-300/70 text-[10px] break-words max-w-[130px]">{msg.rejection_reason}</span>
+                                  )}
+                                  {(msg.realized_pnl != null || msg.pnl != null) && (
+                                    <div className="mt-0.5 pt-0.5 border-t border-white/10 flex items-center gap-1 text-[11px] font-bold">
+                                      <span className="text-white/50 text-[10px]">PnL:</span>
+                                      <span className={(msg.realized_pnl ?? msg.pnl ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                                        {(msg.realized_pnl ?? msg.pnl ?? 0) >= 0 ? '+' : ''}
+                                        {Number(msg.realized_pnl ?? msg.pnl ?? 0).toFixed(4)} USDT
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-white/25 text-[10px]">Sin proceso</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+                    </NeoCard>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <NeoCard title="Operaciones Telegram Paper" value={paperStatus?.blocked_by_loss ? 'BLOQUEADO −10 USDT' : `${paperStatus?.open_positions || 0}/3 abiertas`}>
+              <div className="mt-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-white/50 text-xs">Órdenes y posiciones aisladas del HFT.</p>
+                  <button onClick={loadPaperData} className="text-[#34d8ff] text-xs flex items-center gap-1"><RefreshCw size={12} /> Actualizar</button>
+                </div>
+                {paperSymbols.length > 0 && <div className="flex gap-2 overflow-x-auto pb-1">{paperSymbols.map((symbol) => <button key={symbol} onClick={() => setSelectedPaperSymbol(symbol)} className={`px-3 py-1.5 rounded border text-xs font-bold whitespace-nowrap ${selectedPaperSymbol === symbol ? 'border-[#34d8ff] text-[#34d8ff] bg-[#34d8ff]/10' : 'border-white/10 text-white/60'}`}>{symbol}</button>)}</div>}
+                {selectedPaperSymbol && <div className="rounded-lg border border-white/10 bg-black/20 p-3"><div className="flex items-center justify-between mb-2"><span className="text-[#34d8ff] font-bold text-sm">{selectedPaperSymbol}</span><span className="text-white/50 text-xs">{selectedPaperPrices.length ? `${selectedPaperPrices[selectedPaperPrices.length - 1]}` : 'Esperando precio...'}</span></div>{selectedPaperPrices.length > 1 ? <svg viewBox="0 0 600 180" className="w-full h-44" preserveAspectRatio="none"><polyline fill="none" stroke="#34d8ff" strokeWidth="3" points={chartPoints} /></svg> : <div className="h-44 flex items-center justify-center text-white/35 text-xs">Selecciona el símbolo y espera ticks del gráfico en vivo.</div>}</div>}
+                {selectedPaperOperations.length === 0 ? <p className="text-white/40 text-sm text-center py-6">Aún no hay operaciones Telegram Paper.</p> : <div className="flex flex-col gap-2 max-h-[520px] overflow-y-auto">{selectedPaperOperations.map((operation) => <div key={operation.id} className="rounded-lg border border-white/10 p-3 text-xs"><div className="flex items-center justify-between gap-2"><span className="font-bold text-white">{operation.direction || operation.side} · {operation.entry_type}</span><span className={operation.status === 'CLOSED' ? 'text-white/50' : operation.status === 'REJECTED' ? 'text-red-300' : 'text-green-300'}>{operation.status}</span></div><div className="grid grid-cols-2 gap-2 mt-2 text-white/60"><span>Entrada: {operation.entry_price ?? operation.requested_entry_price ?? '—'}</span><span>Leverage: {operation.leverage ?? '—'}x</span><span>Pendiente: {operation.remaining_amount ?? '—'}</span><span>PnL: {Number(operation.realized_pnl || 0).toFixed(4)} USDT</span></div>{operation.rejection_reason && <p className="text-red-300/80 mt-2">{operation.rejection_reason}</p>}<div className="flex flex-wrap gap-1 mt-2">{operation.targets.map((target) => <span key={target.id} className="rounded bg-white/5 px-2 py-1 text-white/55">TP{target.sequence}: {target.price} ({target.allocation_pct}%) · {target.status}</span>)}</div></div>)}</div>}
+              </div>
+            </NeoCard>
+          </div>
+        )}
       </div>
-    </NeoLayout>
+
+    </SafeNeoLayout>
   );
 }

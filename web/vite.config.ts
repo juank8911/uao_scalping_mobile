@@ -19,13 +19,12 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8000',
         changeOrigin: true,
         ws: true,
-        timeout: 0,        // sin timeout en conexiones WS (keepalive con heartbeat)
-        proxyTimeout: 0,   // ídem para el proxy hacia el backend
+        timeout: 0,
+        proxyTimeout: 0,
       },
     },
   },
 })
-
