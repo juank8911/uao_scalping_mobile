@@ -127,7 +127,16 @@ function disconnectSingleton() {
   intentionallyClosed = true;
   stopHeartbeat();
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-  if (globalWs) { globalWs.onclose = null; globalWs.close(); globalWs = null; }
+  if (globalWs) {
+    const ws = globalWs;
+    ws.onclose = null;
+    if (ws.readyState === WebSocket.CONNECTING) {
+      ws.onopen = () => ws.close();
+    } else {
+      ws.close();
+    }
+    globalWs = null;
+  }
   if (fallbackTimer) { clearInterval(fallbackTimer); fallbackTimer = null; }
   store().setConnected(false);
 }
