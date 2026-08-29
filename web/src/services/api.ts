@@ -123,6 +123,8 @@ export interface TelegramPaperConfig {
   enabled: boolean;
   max_positions: number;
   max_realized_loss_usdt: number;
+  investment_amount_usdt?: number;
+  leverage?: number;
   execution_mode: string;
   entry_without_price: string;
   entry_with_price: string;
@@ -340,6 +342,8 @@ export const updateTelegramPaperConfig = async (config: {
   enabled?: boolean;
   max_positions?: number;
   max_realized_loss_usdt?: number;
+  investment_amount_usdt?: number;
+  leverage?: number;
 }): Promise<TelegramPaperConfig> => {
   const response = await fetchWithAuth(`${API_BASE_URL}/telegram/paper/config`, {
     method: 'PUT',

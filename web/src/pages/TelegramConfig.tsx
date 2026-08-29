@@ -291,6 +291,8 @@ export default function TelegramConfigScreen() {
   const [paperEnabled, setPaperEnabled] = useState(false);
   const [paperMaxPositions, setPaperMaxPositions] = useState(3);
   const [paperMaxLoss, setPaperMaxLoss] = useState(10);
+  const [paperInvestmentAmount, setPaperInvestmentAmount] = useState('50.0');
+  const [paperLeverage, setPaperLeverage] = useState('10');
   const [selectedPaperSymbol, setSelectedPaperSymbol] = useState<string | null>(null);
   const [paperCandles, setPaperCandles] = useState<Record<string, Candle[]>>({});
   const [paperCurrentPrice, setPaperCurrentPrice] = useState<Record<string, number>>({});
@@ -308,6 +310,12 @@ export default function TelegramConfigScreen() {
       setPaperEnabled(config.enabled);
       setPaperMaxPositions(config.max_positions);
       setPaperMaxLoss(config.max_realized_loss_usdt);
+      if (config.investment_amount_usdt != null) {
+        setPaperInvestmentAmount(config.investment_amount_usdt.toString());
+      }
+      if (config.leverage != null) {
+        setPaperLeverage(config.leverage.toString());
+      }
       if (!selectedPaperSymbol && operations.find((item) => item.symbol)?.symbol) {
         setSelectedPaperSymbol(operations.find((item) => item.symbol)?.symbol || null);
       }
@@ -317,15 +325,30 @@ export default function TelegramConfigScreen() {
   };
 
   const savePaperConfig = async () => {
-    setLoading(true);
     setMessage(null);
+
+    const investment = parseFloat(paperInvestmentAmount);
+    if (isNaN(investment) || investment <= 0) {
+      setMessage({ text: 'El monto a invertir debe ser un número mayor a 0.', type: 'error' });
+      return;
+    }
+
+    const lev = parseInt(paperLeverage, 10);
+    if (isNaN(lev) || lev < 1 || lev > 125) {
+      setMessage({ text: 'El apalancamiento base debe ser un entero entre 1 y 125.', type: 'error' });
+      return;
+    }
+
+    setLoading(true);
     try {
       await updateTelegramPaperConfig({
         enabled: paperEnabled,
         max_positions: paperMaxPositions,
         max_realized_loss_usdt: paperMaxLoss,
+        investment_amount_usdt: investment,
+        leverage: lev,
       });
-      setMessage({ text: 'Configuración Telegram Paper guardada.', type: 'success' });
+      setMessage({ text: 'Configuración Telegram Paper guardada exitosamente.', type: 'success' });
       await loadPaperData();
     } catch (e: any) {
       setMessage({ text: e.message, type: 'error' });
@@ -923,6 +946,16 @@ export default function TelegramConfigScreen() {
                   <label className="text-white/60 text-xs font-bold tracking-widest mb-1 block">Límite de pérdida realizada Telegram (USDT)</label>
                   <input type="number" min={0.01} step={0.01} value={paperMaxLoss} onChange={(event) => setPaperMaxLoss(Math.max(0.01, Number(event.target.value) || 10))} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-[#34d8ff]/50" />
                   <p className="text-white/40 text-xs mt-1">Bloquea nuevas entradas al alcanzar −{paperMaxLoss.toFixed(2)} USDT; no cuenta PnL abierto ni órdenes pendientes.</p>
+                </div>
+                <div>
+                  <label className="text-white/60 text-xs font-bold tracking-widest mb-1 block">Monto a Invertir por Operación (USDT)</label>
+                  <input type="number" min={0.01} step={0.01} value={paperInvestmentAmount} onChange={(event) => setPaperInvestmentAmount(event.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-[#34d8ff]/50" />
+                  <p className="text-white/40 text-xs mt-1">Cantidad en USDT que se asignará como margen para cada señal ejecutada de Telegram.</p>
+                </div>
+                <div>
+                  <label className="text-white/60 text-xs font-bold tracking-widest mb-1 block">Apalancamiento Base (x)</label>
+                  <input type="number" min={1} max={125} step={1} value={paperLeverage} onChange={(event) => setPaperLeverage(event.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm outline-none focus:border-[#34d8ff]/50" />
+                  <p className="text-white/40 text-xs mt-1">Apalancamiento que se aplicará cuando la señal recibida no especifique su propio apalancamiento.</p>
                 </div>
                 {paperStatus && <div className="grid grid-cols-3 gap-2 text-center text-xs"><div className="rounded border border-white/10 p-2"><span className="block text-white/40">Abiertas</span><strong className="text-white">{paperStatus.open_positions}</strong></div><div className="rounded border border-white/10 p-2"><span className="block text-white/40">Pendientes</span><strong className="text-white">{paperStatus.pending_orders}</strong></div><div className="rounded border border-white/10 p-2"><span className="block text-white/40">PnL realizado</span><strong className={paperStatus.realized_pnl < 0 ? 'text-red-300' : 'text-green-300'}>{paperStatus.realized_pnl.toFixed(4)}</strong></div></div>}
                 <NeoButton variant="primary" size="md" onClick={savePaperConfig} disabled={loading}>{loading ? 'Guardando...' : 'Guardar Configuración'}</NeoButton>
