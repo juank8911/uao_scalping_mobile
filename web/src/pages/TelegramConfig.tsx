@@ -1059,8 +1059,22 @@ export default function TelegramConfigScreen() {
                         </span>
                       </div>
                       {operation.rejection_reason && <p className="text-red-300/80 mt-2">{operation.rejection_reason}</p>}
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {operation.targets.map((target) => <span key={target.id} className="rounded bg-white/5 px-2 py-1 text-white/55">TP{target.sequence}: {target.price} ({target.allocation_pct}%) · {target.status}</span>)}
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {operation.targets.map((target) => {
+                          const isHit = target.status === 'HIT' || target.status === 'FILLED' || target.status === 'CLOSED';
+                          const isPending = target.status === 'PENDING';
+                          const targetBadgeClass = isHit
+                            ? 'bg-gray-800/80 text-gray-400 border border-gray-700/50'
+                            : isPending
+                            ? 'bg-green-950/60 text-green-300 border border-green-500/40 font-bold'
+                            : 'bg-red-950/60 text-red-300 border border-red-500/40';
+
+                          return (
+                            <span key={target.id} className={`rounded px-2 py-1 text-[11px] ${targetBadgeClass}`}>
+                              TP{target.sequence}: <span className="font-mono tabular-nums">{target.price}</span> ({target.allocation_pct}%) · {target.status}
+                            </span>
+                          );
+                        })}
                       </div>
                     </div>
                   );
