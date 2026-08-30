@@ -18,6 +18,7 @@
  *    Solo actualiza la suscripción de símbolo sin tocar el socket.
  */
 import { useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useEngineStore, type Candle } from '../store/useEngineStore';
 import { getStatus } from '../services/api';
 import { getToken } from '../utils/auth';
@@ -145,6 +146,18 @@ function connectSingleton() {
           break;
         case 'status_update':
           if (data) setStatus(data);
+          break;
+        case 'hft_order_update':
+        case 'telegram_paper_order_update':
+          if (data?.modal) {
+            const { title, message, type: toastType } = data.modal;
+            const text = `${title ? `${title}: ` : ''}${message || ''}`;
+            if (toastType === 'error' || toastType === 'danger') toast.error(text);
+            else if (toastType === 'warning') toast(text, { icon: '⚠️' });
+            else if (toastType === 'info') toast(text, { icon: 'ℹ️' });
+            else toast.success(text);
+          }
+          getStatus().then((s) => store().setStatus(s)).catch(() => {});
           break;
         case 'trade_closed':
         case 'position_opened':
