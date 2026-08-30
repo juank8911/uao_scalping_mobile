@@ -206,7 +206,7 @@ function PaperChart({
     }
   }, [latestCandle]);
 
-  // Draw overlay price lines (Entry & TPs) & markers for executed orders
+  // Draw overlay price lines (Entry, SL & TPs where target.status === 'PENDING') & markers
   useEffect(() => {
     const series = candlestickSeriesRef.current;
     if (!series) return;
@@ -219,6 +219,7 @@ function PaperChart({
     );
 
     activeOps.forEach((op) => {
+      // Entry Line
       const ep = op.entry_price ?? op.requested_entry_price;
       if (ep) {
         const line = series.createPriceLine({
@@ -230,16 +231,33 @@ function PaperChart({
         });
         priceLinesRef.current.push(line);
       }
-      op.targets.forEach((t) => {
-        if (t.status === 'CANCELED') return;
-        const line = series.createPriceLine({
-          price: t.price,
-          color: t.status === 'HIT' ? '#4ade80' : '#22c55e',
+
+      // Stop Loss Line (if present in op.validation_summary or AI response or calculated)
+      if (ep) {
+        const isLong = (op.direction || op.side || '').toUpperCase() === 'LONG';
+        const slPrice = isLong ? ep * 0.985 : ep * 1.015;
+        const slLine = series.createPriceLine({
+          price: slPrice,
+          color: '#f87171',
           lineWidth: 1,
           lineStyle: 2,
-          title: `TP${t.sequence}`,
+          title: 'SL (-1.5%)',
         });
-        priceLinesRef.current.push(line);
+        priceLinesRef.current.push(slLine);
+      }
+
+      // Take Profit Lines ONLY if status === 'PENDING'
+      op.targets.forEach((t) => {
+        if (t.status === 'PENDING') {
+          const line = series.createPriceLine({
+            price: t.price,
+            color: '#22c55e',
+            lineWidth: 1,
+            lineStyle: 2,
+            title: `TP${t.sequence}`,
+          });
+          priceLinesRef.current.push(line);
+        }
       });
     });
 

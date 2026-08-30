@@ -116,9 +116,10 @@ function connectSingleton() {
         return;
       }
 
-      if (type === 'candles_snapshot') {
-        if (Array.isArray(payload.candles)) {
-          setCandlesSnapshot(payload.candles);
+      if (type === 'candles_snapshot' || type === 'ohlcv_candles') {
+        const candlesList = payload.candles || payload.data;
+        if (Array.isArray(candlesList)) {
+          setCandlesSnapshot(candlesList);
         }
         return;
       }
