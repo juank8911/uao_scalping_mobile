@@ -144,6 +144,11 @@ function PaperChart({
         borderVisible: false,
         wickUpColor: '#4ade80',
         wickDownColor: '#f87171',
+        priceFormat: {
+          type: 'price',
+          precision: 6,
+          minMove: 0.000001,
+        },
       });
 
       candlestickSeriesRef.current = candlestickSeries;
@@ -372,8 +377,13 @@ export default function TelegramConfigScreen() {
       if (config.leverage != null) {
         setPaperLeverage(config.leverage.toString());
       }
-      if (!selectedPaperSymbol && operations.find((item) => item.symbol)?.symbol) {
-        setSelectedPaperSymbol(operations.find((item) => item.symbol)?.symbol || null);
+      if (!selectedPaperSymbol) {
+        const activeItem = operations.find(
+          (item) => item.symbol && item.status !== 'CLOSED' && item.status !== 'REJECTED' && item.status !== 'CANCELED'
+        ) || operations.find((item) => item.symbol);
+        if (activeItem?.symbol) {
+          setSelectedPaperSymbol(activeItem.symbol);
+        }
       }
     } catch (error) {
       console.error('Error cargando Telegram Paper:', error);
