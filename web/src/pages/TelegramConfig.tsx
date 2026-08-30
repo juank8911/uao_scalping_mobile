@@ -355,6 +355,9 @@ export default function TelegramConfigScreen() {
   const [paperInvestmentAmount, setPaperInvestmentAmount] = useState('50.0');
   const [paperLeverage, setPaperLeverage] = useState('10');
   const [selectedPaperSymbol, setSelectedPaperSymbol] = useState<string | null>(null);
+  const selectedPaperSymbolRef = useRef<string | null>(null);
+  selectedPaperSymbolRef.current = selectedPaperSymbol;
+
   const [paperCandles, setPaperCandles] = useState<Record<string, Candle[]>>({});
   const [paperCurrentPrice, setPaperCurrentPrice] = useState<Record<string, number>>({});
   useEngineWebSocket(selectedPaperSymbol);
@@ -377,7 +380,7 @@ export default function TelegramConfigScreen() {
       if (config.leverage != null) {
         setPaperLeverage(config.leverage.toString());
       }
-      if (!selectedPaperSymbol) {
+      if (!selectedPaperSymbolRef.current) {
         const activeItem = operations.find(
           (item) => item.symbol && item.status !== 'CLOSED' && item.status !== 'REJECTED' && item.status !== 'CANCELED'
         ) || operations.find((item) => item.symbol);
