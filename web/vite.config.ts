@@ -25,6 +25,13 @@ export default defineConfig({
         timeout: 0,
         proxyTimeout: 0,
       },
+      '/ws': {
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        ws: true,
+        timeout: 0,
+        proxyTimeout: 0,
+      },
     },
   },
 })

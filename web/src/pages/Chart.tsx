@@ -7,7 +7,7 @@ import type { ChartHistoryRecord, PositionInfo } from '../services/api';
 import { createChart, ColorType, CrosshairMode } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import { useEngineStore } from '../store/useEngineStore';
-import { useEngineWebSocket } from '../hooks/useEngineWebSocket';
+import { useEngineWebSocket, subscribeCandles, unsubscribeCandles } from '../hooks/useEngineWebSocket';
 
 export default function ChartScreen() {
   const location = useLocation();
@@ -16,6 +16,8 @@ export default function ChartScreen() {
 
   // --- Estado global (Zustand) ---
   const status = useEngineStore((state) => state.status);
+  const candlesSnapshot = useEngineStore((state) => state.candlesSnapshot);
+  const latestCandle = useEngineStore((state) => state.latestCandle);
 
   // --- Estado local de UI ---
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(initialSymbol);
@@ -37,24 +39,34 @@ export default function ChartScreen() {
   const candlestickSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const currentLinesRef = useRef<any[]>([]);
 
+  const currentPos = status?.open_positions?.find(p => p.symbol === selectedSymbol);
+  const currentOrder = status?.open_orders?.find(o => o.symbol === selectedSymbol);
+  const symbolSource: 'HFT' | 'TELEGRAM' = currentPos?.source || currentOrder?.source || 'HFT';
+
   useEffect(() => {
     let isMounted = true;
     const fetchData = async () => {
       await getCredentials();
       if (!isMounted || !status) return;
 
-      const nextSymbol = selectedSymbol && openPositionSymbols.includes(selectedSymbol)
-        ? selectedSymbol
-        : (openPositionSymbols[0] ?? null);
-      if (nextSymbol !== selectedSymbol) {
-        setSelectedSymbol(nextSymbol);
+      if (!selectedSymbol && openPositionSymbols.length > 0) {
+        setSelectedSymbol(openPositionSymbols[0]);
       }
       setIsLoading(false);
     };
 
     fetchData();
     return () => { isMounted = false; };
-  }, [selectedSymbol, status, openPositionSymbols.join('|')]);
+  }, [status]);
+
+  // Set default timeframe based on source when symbol changes
+  useEffect(() => {
+    if (!selectedSymbol) return;
+    const pos = status?.open_positions?.find(p => p.symbol === selectedSymbol);
+    const ord = status?.open_orders?.find(o => o.symbol === selectedSymbol);
+    const src = pos?.source || ord?.source || 'HFT';
+    setTimeframe(src === 'TELEGRAM' ? '1h' : '1m');
+  }, [selectedSymbol]);
 
   // Init chart
   useEffect(() => {
@@ -133,12 +145,14 @@ export default function ChartScreen() {
     }
   }, [selectedSymbol]); // Re-init chart on symbol change to clear everything
 
-  // Fetch and update base data
+  // Subscribe to WS candles & fallback REST fetch
   useEffect(() => {
     let isMounted = true;
     if (!selectedSymbol || !candlestickSeriesRef.current || !chartRef.current) return;
 
-    let handleWsMessage: ((e: CustomEvent) => void) | null = null;
+    // Suscribir por WS
+    subscribeCandles(selectedSymbol, timeframe, symbolSource);
+
     const loadBaseData = async () => {
       try {
         const data = await fetchChartData(selectedSymbol, timeframe);
@@ -151,39 +165,6 @@ export default function ChartScreen() {
         if (series && data && data.length > 0) {
           series.setData(data);
         }
-
-        handleWsMessage = (e: CustomEvent) => {
-          const { event, symbol, data: wsData } = e.detail;
-          if (event === 'ticker_update' && symbol === selectedSymbol) {
-            const currentPrice = parseFloat(wsData.last || wsData.price);
-            if (!isNaN(currentPrice)) {
-              const latestCandle = data[data.length - 1];
-              if (latestCandle) {
-                const updatedCandle = {
-                  time: latestCandle.time,
-                  open: latestCandle.open,
-                  high: Math.max(latestCandle.high as number, currentPrice),
-                  low: Math.min(latestCandle.low as number, currentPrice),
-                  close: currentPrice
-                };
-                candlestickSeriesRef.current?.update(updatedCandle);
-                latestCandle.high = updatedCandle.high;
-                latestCandle.low = updatedCandle.low;
-                latestCandle.close = updatedCandle.close;
-              }
-              
-              currentLinesRef.current.forEach(item => {
-                if (item && (item.type === 'TAKE_PROFIT' || item.type === 'STOP_LOSS') && item.line) {
-                  const distancePct = Math.abs((item.price - currentPrice) / currentPrice) * 100;
-                  item.line.applyOptions({
-                    title: `${distancePct.toFixed(2)}%`
-                  });
-                }
-              });
-            }
-          }
-        };
-        window.addEventListener('ws:message', handleWsMessage as EventListener);
       } catch (err) {
         console.error("Error loading base chart data:", err);
       }
@@ -193,11 +174,25 @@ export default function ChartScreen() {
 
     return () => {
       isMounted = false;
-      if (handleWsMessage) {
-        window.removeEventListener('ws:message', handleWsMessage as EventListener);
+      if (selectedSymbol) {
+        unsubscribeCandles(selectedSymbol, symbolSource);
       }
     };
-  }, [selectedSymbol, timeframe]);
+  }, [selectedSymbol, timeframe, symbolSource]);
+
+  // Handle live candles snapshot from WS store
+  useEffect(() => {
+    if (candlesSnapshot && candlestickSeriesRef.current) {
+      candlestickSeriesRef.current.setData(candlesSnapshot);
+    }
+  }, [candlesSnapshot]);
+
+  // Handle live single candle update from WS store
+  useEffect(() => {
+    if (latestCandle && candlestickSeriesRef.current) {
+      candlestickSeriesRef.current.update(latestCandle);
+    }
+  }, [latestCandle]);
 
   // Handle overlays (trades, lines) independently
   useEffect(() => {
