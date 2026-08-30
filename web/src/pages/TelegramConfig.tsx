@@ -77,23 +77,6 @@ interface TelegramMessage {
   ai_response?: AiResponse | null;
 }
 
-interface Candle { t: number; o: number; h: number; l: number; c: number; }
-
-async function fetchOkxCandles(symbol: string): Promise<Candle[]> {
-  // OKX uses instId like BTC-USDT-SWAP  (ONT/USDT:USDT → ONT-USDT-SWAP)
-  const instId = symbol.replace('/', '-').replace(':USDT', '-SWAP');
-  const url = `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=1m&limit=80`;
-  try {
-    const r = await fetch(url);
-    if (!r.ok) return [];
-    const json = await r.json();
-    // data: [[ts, o, h, l, c, vol, volCcy, volCcyQuote, confirm], ...]
-    const raw: string[][] = (json.data || []).reverse();
-    return raw.map((d) => ({ t: Number(d[0]), o: Number(d[1]), h: Number(d[2]), l: Number(d[3]), c: Number(d[4]) }));
-  } catch {
-    return [];
-  }
-}
 
 function PaperChart({
   symbol, operations,
@@ -358,8 +341,6 @@ export default function TelegramConfigScreen() {
   const selectedPaperSymbolRef = useRef<string | null>(null);
   selectedPaperSymbolRef.current = selectedPaperSymbol;
 
-  const [paperCandles, setPaperCandles] = useState<Record<string, Candle[]>>({});
-  const [paperCurrentPrice, setPaperCurrentPrice] = useState<Record<string, number>>({});
   useEngineWebSocket(selectedPaperSymbol);
 
   const loadPaperData = async () => {
@@ -432,24 +413,6 @@ export default function TelegramConfigScreen() {
     return () => window.clearInterval(timer);
   }, []);
 
-  // Fetch candles + current price whenever selected symbol changes
-  useEffect(() => {
-    if (!selectedPaperSymbol) return;
-    let cancelled = false;
-    const load = async () => {
-      const candles = await fetchOkxCandles(selectedPaperSymbol);
-      if (cancelled) return;
-      setPaperCandles((prev) => ({ ...prev, [selectedPaperSymbol]: candles }));
-      if (candles.length > 0) {
-        setPaperCurrentPrice((prev) => ({ ...prev, [selectedPaperSymbol]: candles[candles.length - 1].c }));
-      }
-    };
-    load();
-    const interval = window.setInterval(load, 15000);
-    return () => { cancelled = true; window.clearInterval(interval); };
-  }, [selectedPaperSymbol]);
-
-  // Also update current price from WS ticker ticks
 
   useEffect(() => {
     apiFetch('/config').then((data) => {
@@ -487,13 +450,6 @@ export default function TelegramConfigScreen() {
   useEffect(() => {
     const handleTelegramMessage = (event: Event) => {
       const payload = (event as CustomEvent).detail;
-      if (payload?.event === 'ticker_update' && payload.symbol && payload.data) {
-        const price = Number(payload.data.last ?? payload.data.close ?? payload.data.price);
-        if (Number.isFinite(price) && price > 0) {
-          setPaperCurrentPrice((previous) => ({ ...previous, [String(payload.symbol)]: price }));
-        }
-        return;
-      }
       if (payload?.event === 'telegram_paper_order_update' && payload.data) {
         loadPaperData();
         return;
